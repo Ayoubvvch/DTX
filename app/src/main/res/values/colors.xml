@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <color name="dtx_bg">#030303</color>
+    <color name="dtx_primary">#F5A623</color>
+    <color name="dtx_cyan">#00FFFF</color>
+    <color name="dtx_red">#E23535</color>
+    <color name="dtx_surface">#0C0C0C</color>
+</resources>

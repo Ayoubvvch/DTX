@@ -1,0 +1,3585 @@
+<!DOCTYPE html>
+<html lang="en" dir="ltr">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>System Architecture - The Great Race</title>
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;600;800;900&family=Share+Tech+Mono&display=swap');
+    
+    :root {
+      /* Dynamic Theme Variables */
+      --theme-primary: #F5A623;
+      --theme-glow: rgba(245, 166, 35, 0.25);
+      
+      --red: #E23535;
+      --red-glow: rgba(226, 53, 53, 0.25);
+      --green: #4CAF50;
+      --blue: #00FFFF;
+      --cyan-glow: rgba(0, 255, 255, 0.3);
+      --gold: #FFD700;
+      --purple: #9C27B0;
+      
+      --bg: #030303;
+      --surface: #0c0c0c;
+      --surface-light: #161616;
+      --surface-hover: #1f1f1f;
+      --border: #2a2a2a;
+      
+      --text: #F0F0F0;
+      --text-dim: #999;
+      --text-muted: #555;
+    }
+    
+    * { 
+      box-sizing: border-box; 
+      margin: 0; 
+      padding: 0; 
+      transition: color 0.3s ease, border-color 0.3s ease, background-color 0.3s ease, box-shadow 0.3s ease; 
+    }
+    
+    body { 
+      background-color: var(--bg); 
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      min-height: 100vh;
+      font-family: 'Inter', sans-serif;
+      color: var(--text);
+      overflow-x: hidden;
+      background-image: 
+        radial-gradient(circle at 50% 0%, rgba(20,20,20,1) 0%, rgba(0,0,0,1) 80%);
+    }
+    
+    /* Custom Scrollbar */
+    ::-webkit-scrollbar { width: 6px; }
+    ::-webkit-scrollbar-track { background: var(--bg); }
+    ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
+    ::-webkit-scrollbar-thumb:hover { background: var(--text-muted); }
+
+    #app-container {
+      background: var(--surface);
+      width: 100%;
+      max-width: 500px;
+      height: 100vh;
+      max-height: 850px;
+      padding: 24px 24px 0 24px;
+      border: 1px solid var(--border);
+      position: relative;
+      overflow: hidden;
+      display: flex;
+      flex-direction: column;
+      box-shadow: 0 20px 60px rgba(0,0,0,0.95), inset 0 0 20px rgba(0,0,0,0.5);
+    }
+    
+    @media (min-width: 520px) {
+      #app-container {
+        height: 90vh;
+        border-radius: 16px;
+      }
+    }
+
+    /* Top glowing accent */
+    #app-container::before {
+      content: '';
+      position: absolute;
+      top: 0; left: 0; right: 0; height: 3px;
+      background: var(--theme-primary);
+      box-shadow: 0 0 25px var(--theme-primary);
+      transition: background 1s, box-shadow 1s;
+      z-index: 10;
+    }
+    
+    .header {
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-start;
+      margin-bottom: 24px;
+      border-bottom: 1px solid var(--border);
+      padding-bottom: 16px;
+      flex-shrink: 0;
+    }
+    
+    .sys-label {
+      font-family: 'Share Tech Mono', monospace;
+      font-size: 11px;
+      color: var(--text-dim);
+      letter-spacing: 2px;
+      text-transform: uppercase;
+    }
+    
+    .title {
+      font-weight: 900;
+      font-size: 26px;
+      color: var(--theme-primary);
+      line-height: 1.1;
+      margin-top: 6px;
+      text-transform: uppercase;
+      letter-spacing: 1px;
+      text-shadow: 0 0 15px var(--theme-glow);
+    }
+    
+    .status-dot {
+      width: 8px; height: 8px;
+      border-radius: 50%;
+      display: inline-block;
+      margin-right: 6px;
+      animation: blink 1.5s infinite;
+    }
+    
+    .dot-active { background: var(--green); box-shadow: 0 0 10px var(--green); }
+    .dot-idle { background: var(--text-muted); animation: none; }
+    .dot-error { background: var(--red); box-shadow: 0 0 10px var(--red); }
+    
+    @keyframes blink { 0%, 100% { opacity: 1; } 50% { opacity: 0.3; } }
+
+    /* Tabs Navigation */
+    .nav-tabs {
+      position: absolute;
+      bottom: 0; left: 0; right: 0;
+      display: none; 
+      background: rgba(12, 12, 12, 0.95);
+      backdrop-filter: blur(10px);
+      border-top: 1px solid var(--border);
+      z-index: 20;
+    }
+    .nav-tab {
+      flex: 1;
+      padding: 18px 0;
+      text-align: center;
+      color: var(--text-dim);
+      cursor: pointer;
+      font-weight: 800;
+      font-size: 12px;
+      text-transform: uppercase;
+      letter-spacing: 1.5px;
+      position: relative;
+    }
+    .nav-tab::after {
+      content: '';
+      position: absolute;
+      top: 0; left: 50%; transform: translateX(-50%);
+      width: 0; height: 2px;
+      background: var(--theme-primary);
+      transition: width 0.3s ease;
+    }
+    .nav-tab.active {
+      color: var(--theme-primary);
+      background: linear-gradient(to top, transparent, var(--theme-glow));
+    }
+    .nav-tab.active::after { width: 100%; }
+    .nav-tab:hover:not(.active) { color: var(--text); background: var(--surface-light); }
+
+    .view-section { 
+      display: none; 
+      animation: fadeIn 0.4s cubic-bezier(0.16, 1, 0.3, 1); 
+      flex: 1;
+      overflow-y: auto;
+      overflow-x: hidden;
+      margin: 0 -24px;
+      padding: 0 24px 80px 24px;
+    }
+    .view-section.active { display: block; }
+    @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+
+    /* Forms & Inputs */
+    .auth-title { font-size: 24px; font-weight: 900; color: var(--text); margin-bottom: 20px; text-align: center; text-transform: uppercase; letter-spacing: 1px; }
+    .auth-input { 
+      width: 100%; background: #000; color: var(--theme-primary); 
+      border: 1px solid var(--border); padding: 16px; border-radius: 8px; 
+      font-family: 'Share Tech Mono', monospace; font-size: 16px; 
+      margin-bottom: 16px; outline: none; text-align: center; letter-spacing: 2px;
+      box-shadow: inset 0 2px 4px rgba(0,0,0,0.5);
+    }
+    .auth-input:focus { border-color: var(--theme-primary); box-shadow: 0 0 15px var(--theme-glow), inset 0 2px 4px rgba(0,0,0,0.5); }
+    .auth-input::placeholder { color: var(--text-muted); letter-spacing: 1px; }
+    
+    /* Onboarding Wizard */
+    .wizard-step { display: none; }
+    .wizard-step.active { display: block; animation: fadeIn 0.5s ease; }
+    .wizard-q { font-size: 14px; font-weight: 800; color: var(--text); margin-bottom: 12px; line-height: 1.5; }
+    .wizard-desc { font-size: 13px; color: var(--text-dim); margin-bottom: 24px; line-height: 1.6; }
+    
+    .rank-preview-list { max-height: 250px; overflow-y: auto; border: 1px solid var(--border); border-radius: 8px; margin-bottom: 24px; background: #000; padding: 12px; }
+    .rank-preview-item { padding: 12px; border-bottom: 1px solid var(--border); font-size: 13px; display: flex; justify-content: space-between; align-items: center; }
+    .rank-preview-item:last-child { border-bottom: none; }
+    
+    /* Dashboard Elements */
+    .timer-block { text-align: center; padding: 10px 0; }
+    .timer-grid { display: flex; justify-content: center; gap: 10px; margin-bottom: 30px; }
+    .unit {
+      display: flex; flex-direction: column; align-items: center;
+      min-width: 70px; background: var(--surface-light);
+      padding: 16px 8px; border-radius: 12px; border: 1px solid var(--border);
+      box-shadow: inset 0 2px 5px rgba(255,255,255,0.02);
+    }
+    .unit-val { font-family: 'Share Tech Mono', monospace; font-size: 46px; color: var(--theme-primary); line-height: 1; text-shadow: 0 0 20px var(--theme-glow); }
+    .unit-label { font-size: 11px; color: var(--text-dim); letter-spacing: 1.5px; margin-top: 8px; font-weight: 800; text-transform: uppercase; }
+    .sep { font-family: 'Share Tech Mono', monospace; font-size: 32px; color: var(--text-muted); line-height: 1; padding-top: 20px; }
+    
+    /* EP Panel */
+    .ep-panel {
+      background: linear-gradient(160deg, #161616, #0a0a0a);
+      border: 1px solid var(--theme-primary);
+      box-shadow: 0 10px 30px var(--theme-glow), inset 0 0 20px rgba(0,0,0,0.8);
+      border-radius: 16px;
+      padding: 24px;
+      margin-bottom: 24px;
+      text-align: center;
+      position: relative;
+      overflow: hidden;
+      transition: all 0.8s cubic-bezier(0.16, 1, 0.3, 1);
+    }
+    .ep-score {
+      font-family: 'Share Tech Mono', monospace;
+      font-size: 42px;
+      font-weight: bold;
+      color: var(--theme-primary);
+      text-shadow: 0 0 25px var(--theme-primary);
+      margin: 8px 0;
+      letter-spacing: -1px;
+    }
+    .ep-label { font-size: 12px; color: var(--text-dim); letter-spacing: 2px; font-weight: 800; text-transform: uppercase; }
+    
+    .mult-container { display: flex; justify-content: space-around; margin-top: 20px; border-top: 1px dashed var(--border); padding-top: 20px; }
+    .mult-box { text-align: center; }
+    .mult-lbl { font-size: 10px; color: var(--text-dim); text-transform: uppercase; letter-spacing: 1px; margin-bottom: 6px; font-weight: bold;}
+    .mult-val { font-family: 'Share Tech Mono', monospace; font-size: 20px; font-weight: bold; }
+    .mult-pos { color: var(--theme-primary); text-shadow: 0 0 10px var(--theme-glow); }
+    .mult-neg { color: var(--red); text-shadow: 0 0 10px var(--red-glow); }
+
+    .sys-dmg-alert { font-size: 11px; color: var(--red); margin-top: 16px; font-family: 'Share Tech Mono', monospace; animation: blink 2s infinite; letter-spacing: 1px; }
+
+    /* Actions Panel */
+    .section-title { font-size: 13px; font-weight: 900; color: var(--theme-primary); margin: 16px 0 8px 0; text-transform: uppercase; border-bottom: 1px solid var(--border); padding-bottom: 6px; letter-spacing: 1.5px; }
+    .actions-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 16px; }
+    .btn-action {
+      background: var(--surface-light); border: 1px solid var(--border); color: var(--text);
+      padding: 12px 8px; border-radius: 10px; cursor: pointer; font-family: inherit; font-weight: 800;
+      font-size: 11px; transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1); display: flex; flex-direction: column; align-items: center; gap: 4px; text-align: center;
+    }
+    .btn-action:hover { background: var(--surface-hover); border-color: var(--theme-primary); transform: translateY(-2px); box-shadow: 0 6px 15px rgba(0,0,0,0.4), 0 0 12px var(--theme-glow); }
+    .btn-action:active { transform: translateY(0); box-shadow: none; }
+    .action-icon { font-size: 20px; margin-bottom: 2px;}
+    .action-ep { font-size: 10px; color: var(--theme-primary); font-family: 'Share Tech Mono', monospace; margin-top: 2px; font-weight: bold;}
+
+    .btn-penalty { border-color: rgba(226, 53, 53, 0.2); }
+    .btn-penalty:hover { border-color: var(--red); background: rgba(226, 53, 53, 0.05); box-shadow: 0 8px 20px rgba(0,0,0,0.5), 0 0 15px var(--red-glow); }
+    .btn-penalty .action-ep { color: var(--red); }
+    
+    .btn-mental { border-color: rgba(0, 255, 255, 0.2); }
+    .btn-mental:hover { border-color: var(--blue); background: rgba(0, 255, 255, 0.05); box-shadow: 0 8px 20px rgba(0,0,0,0.5), 0 0 15px var(--cyan-glow); }
+    .btn-mental .action-ep { color: var(--blue); }
+
+    .btn-purple { border-color: rgba(156, 39, 176, 0.3); }
+    .btn-purple:hover { border-color: var(--purple); background: rgba(156, 39, 176, 0.05); box-shadow: 0 8px 20px rgba(0,0,0,0.5), 0 0 15px rgba(156, 39, 176, 0.4); }
+
+    .heal-text { color: var(--green); font-size: 10px; margin-top: 4px; font-weight: 600;}
+
+    /* Contract (Quest) */
+    .contract-box { background: #080808; border: 1px dashed var(--border); padding: 20px; border-radius: 12px; text-align: center; }
+    .contract-input { width: 100%; background: #000; color: var(--text); border: 1px solid var(--border); padding: 12px; border-radius: 8px; font-family: inherit; margin-bottom: 12px; outline: none; }
+    .contract-input:focus { border-color: var(--blue); }
+    .contract-active-text { font-size: 16px; font-weight: 800; color: var(--text); margin-bottom: 20px; word-wrap: break-word; font-style: italic; }
+
+    /* Action Log (History) */
+    .action-log-list { max-height: 160px; overflow-y: auto; margin-bottom: 20px; border: 1px solid var(--border); border-radius: 12px; background: var(--surface-light); }
+    .action-log-item { display: flex; justify-content: space-between; align-items: center; padding: 12px 16px; border-bottom: 1px solid var(--border); }
+    .log-info { display: flex; flex-direction: column; gap: 4px; text-align: left; }
+    .log-title { font-size: 13px; font-weight: 800; color: var(--text); }
+    .log-time { font-size: 11px; color: var(--text-muted); }
+    .log-ep { font-family: 'Share Tech Mono', monospace; font-size: 13px; display: inline-block; font-weight: bold;}
+    .log-ep.pos { color: var(--theme-primary); }
+    .log-ep.neg { color: var(--red); }
+    .log-ep.heal { color: var(--green); }
+    .log-ep.cyan { color: var(--blue); }
+    .log-ep.gold { color: var(--gold); text-shadow: 0 0 8px rgba(255,215,0,0.6); }
+    .log-ep.purple { color: var(--purple); text-shadow: 0 0 8px rgba(156, 39, 176, 0.6); }
+    .btn-undo-mini { background: rgba(226, 53, 53, 0.1); border: 1px solid var(--red); color: var(--red); padding: 6px 12px; border-radius: 6px; font-size: 10px; cursor: pointer; transition: 0.2s; font-family: inherit; font-weight: 800; text-transform: uppercase; }
+    .btn-undo-mini:hover { background: var(--red); color: #000; }
+    
+    /* Rank Display */
+    .rank-container { margin-top: 16px; text-align: center; padding: 16px; background: var(--surface-light); border-radius: 12px; border: 1px solid var(--border);}
+    .rank-prob { font-family: 'Share Tech Mono', monospace; font-size: 11px; color: var(--text-dim); margin-bottom: 8px; letter-spacing: 1.5px; text-transform: uppercase; }
+    .rank-name { font-size: 26px; font-weight: 900; color: var(--theme-primary); letter-spacing: 1px; text-shadow: 0 0 20px var(--theme-glow); text-transform: uppercase; line-height: 1.2;}
+    .rank-desc { font-size: 13px; color: var(--text-dim); margin-top: 8px; line-height: 1.5; }
+    .progress-wrapper { width: 100%; height: 6px; background: #000; border-radius: 3px; margin-top: 20px; overflow: hidden; box-shadow: inset 0 1px 3px rgba(0,0,0,0.5);}
+    .progress-bar { height: 100%; background: var(--theme-primary); width: 0%; transition: width 1s cubic-bezier(0.16, 1, 0.3, 1); box-shadow: 0 0 15px var(--theme-primary); }
+
+    /* Buttons */
+    .btn { display: block; width: 100%; padding: 16px; font-family: inherit; font-weight: 900; font-size: 14px; cursor: pointer; border-radius: 8px; transition: all 0.2s ease; border: none; text-transform: uppercase; letter-spacing: 1px;}
+    .btn-primary { background: var(--theme-primary); color: #000; box-shadow: 0 4px 15px var(--theme-glow); }
+    .btn-primary:hover { transform: translateY(-2px); box-shadow: 0 8px 25px var(--theme-glow); filter: brightness(1.1); }
+    .btn-danger { background: transparent; color: var(--red); border: 1px solid var(--red); margin-top: 24px; }
+    .btn-danger:hover { background: rgba(226,53,53,0.1); }
+    .btn-outline { background: transparent; color: var(--text); border: 1px solid var(--text-dim); }
+    .btn-outline:hover { border-color: var(--text); color: #fff; background: rgba(255,255,255,0.05);}
+
+    /* Leaderboard */
+    .lb-list { display: flex; flex-direction: column; gap: 10px; margin-top: 16px; padding-bottom: 20px; }
+    .lb-item { background: var(--surface-light); border: 1px solid var(--border); padding: 14px 16px; border-radius: 12px; display: flex; justify-content: space-between; align-items: center; transition: 0.3s; cursor: pointer;}
+    .lb-item:hover { border-color: var(--theme-primary); background: var(--surface-hover); transform: translateX(4px); box-shadow: -4px 4px 15px rgba(0,0,0,0.3);}
+    .lb-item.is-me { border-color: var(--theme-primary); background: rgba(245, 166, 35, 0.05); box-shadow: 0 0 15px var(--theme-glow); }
+    .lb-item.is-bot { border-left: 4px solid var(--blue); }
+    .lb-rank-num { font-family: 'Share Tech Mono', monospace; font-size: 20px; font-weight: bold; color: var(--text-muted); width: 36px; text-align: left; }
+    .lb-info { flex: 1; text-align: left; padding-left: 12px; }
+    .lb-name { font-size: 15px; font-weight: 800; color: var(--text); display: flex; align-items: center; gap: 8px; }
+    .lb-bot-tag { font-size: 10px; color: var(--text-muted); opacity: 0.4; font-weight: normal; margin-left: 2px; }
+    .lb-level { font-size: 12px; color: var(--text-dim); margin-top: 3px; }
+    .lb-ep { font-family: 'Share Tech Mono', monospace; font-size: 18px; color: var(--theme-primary); font-weight: bold; text-align: right; }
+    
+    .gold-rank { color: #FFD700; text-shadow: 0 0 15px rgba(255,215,0,0.6); }
+    .silver-rank { color: #E0E0E0; text-shadow: 0 0 10px rgba(255,255,255,0.4);}
+    .bronze-rank { color: #CD7F32; text-shadow: 0 0 10px rgba(205,127,50,0.4);}
+
+    /* Mind Intercept Modal */
+    .modal-overlay { display: none; position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.9); z-index: 100; justify-content: center; align-items: center; backdrop-filter: blur(8px); animation: fadeIn 0.3s ease; }
+    .modal-overlay.active { display: flex; }
+    .mind-modal { background: #080808; border: 1px solid var(--blue); border-radius: 16px; width: 90%; max-width: 420px; padding: 24px; box-shadow: 0 20px 50px rgba(0,0,0,0.8), 0 0 40px rgba(0,255,255,0.15); position: relative; overflow: hidden; }
+    .mind-modal::before { content:''; position: absolute; top:0; left:0; width:100%; height:3px; background: var(--blue); box-shadow: 0 0 20px var(--blue); }
+    .modal-header-text { font-family: 'Share Tech Mono', monospace; font-size: 12px; color: var(--blue); letter-spacing: 2px; margin-bottom: 20px; display: flex; justify-content: space-between; border-bottom: 1px dashed var(--border); padding-bottom: 12px; }
+    .modal-target-name { font-size: 24px; font-weight: 900; color: var(--text); text-transform: uppercase; margin-bottom: 6px; }
+    .modal-target-class { font-size: 12px; color: var(--text-dim); margin-bottom: 24px; text-transform: uppercase; letter-spacing: 1.5px; }
+    .modal-stats-grid { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 12px; margin-bottom: 24px; }
+    .modal-stat-box { background: rgba(0,255,255,0.03); border: 1px solid rgba(0,255,255,0.2); padding: 12px; border-radius: 8px; text-align: center; }
+    .modal-stat-val { font-family: 'Share Tech Mono', monospace; font-size: 18px; color: var(--text); font-weight: bold; }
+    .modal-stat-lbl { font-size: 10px; color: var(--blue); text-transform: uppercase; margin-top: 4px; font-weight: bold;}
+    .thought-container { background: #111; border-left: 4px solid var(--theme-primary); padding: 16px; border-radius: 0 8px 8px 0; margin-bottom: 24px; min-height: 90px; position: relative;}
+    .thought-label { font-family: 'Share Tech Mono', monospace; font-size: 11px; color: var(--theme-primary); margin-bottom: 10px; letter-spacing: 1px;}
+    .thought-text { font-size: 14px; color: #fff; font-style: italic; line-height: 1.6; }
+    .thought-text::before { content: '"'; color: var(--text-muted); }
+    .thought-text::after { content: '"'; color: var(--text-muted); }
+
+    /* Zen Mode */
+    .btn-zen { background: transparent; color: var(--theme-primary); border: 1px solid var(--theme-primary); padding: 6px 10px; font-size: 11px; cursor: pointer; border-radius: 6px; font-family: 'Share Tech Mono', monospace; letter-spacing: 1px; margin-left: 12px; transition: 0.3s; }
+    .btn-zen.active { background: var(--theme-primary); color: #000; box-shadow: 0 0 15px var(--theme-primary); }
+    
+    .zen-active .zen-hide { opacity: 0; pointer-events: none; max-height: 0; overflow: hidden; margin: 0; padding: 0; border: none; transition: all 0.5s ease; }
+    .zen-active .zen-show { display: block; animation: fadeIn 1s ease; }
+    .zen-show { display: none; text-align: center; padding: 80px 20px; }
+    .zen-icon { font-size: 60px; margin-bottom: 24px; color: var(--theme-primary); animation: godPulse 4s infinite; opacity: 0.8; }
+    .zen-text { font-size: 22px; font-weight: 900; letter-spacing: 4px; color: var(--text); text-transform: uppercase; }
+
+    /* Stats Grid */
+    .stats-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 24px; }
+    .stat-card { background: var(--surface-light); padding: 20px 16px; border-radius: 12px; text-align: center; border: 1px solid var(--border); }
+    .stat-val { font-family: 'Share Tech Mono', monospace; font-size: 28px; color: var(--theme-primary); margin-bottom: 6px; font-weight: bold;}
+    .stat-label { font-size: 11px; color: var(--text-dim); font-weight: 800; text-transform: uppercase; letter-spacing: 1px;}
+
+    /* Effects */
+    @keyframes godPulse {
+      0% { box-shadow: 0 0 20px var(--theme-glow); border-color: var(--border); }
+      50% { box-shadow: 0 0 80px var(--theme-primary); border-color: var(--theme-primary); }
+      100% { box-shadow: 0 0 20px var(--theme-glow); border-color: var(--border); }
+    }
+    .fx-god { animation: godPulse 4s infinite ease-in-out; }
+
+    @keyframes glitch-anim { 0% { transform: translate(0) } 20% { transform: translate(-2px, 2px) } 40% { transform: translate(-2px, -2px) } 60% { transform: translate(2px, 2px) } 80% { transform: translate(2px, -2px) } 100% { transform: translate(0) } }
+    .fx-glitch .title, .fx-glitch .ep-score, .fx-glitch .unit-val { animation: glitch-anim 0.3s infinite; text-shadow: 2px 0 red, -2px 0 blue; }
+    .fx-glitch { box-shadow: inset 0 0 60px rgba(255,255,255,0.05); border-color: #fff; }
+
+    @keyframes goldShimmer { 0% { background-position: -200% center; } 100% { background-position: 200% center; } }
+    .fx-absolute::before { background: linear-gradient(90deg, #FFD700, #FFF, #FFD700); background-size: 200% auto; animation: goldShimmer 2s linear infinite; height: 5px; box-shadow: 0 0 20px #FFD700;}
+    .fx-absolute .title, .fx-absolute .ep-score { background: linear-gradient(90deg, #FFD700, #FFF, #FFD700); background-size: 200% auto; -webkit-background-clip: text; -webkit-text-fill-color: transparent; animation: goldShimmer 2s linear infinite; }
+
+    /* Toast Notification */
+    #toast { 
+      visibility: hidden; min-width: 280px; max-width: 90%; background-color: var(--green); color: #fff; 
+      text-align: center; border-radius: 8px; padding: 16px; position: fixed; z-index: 1000; 
+      left: 50%; bottom: 30px; transform: translateX(-50%) translateY(20px); font-size: 14px; 
+      font-weight: bold; box-shadow: 0 10px 30px rgba(0,0,0,0.8); opacity: 0; 
+      transition: opacity 0.4s cubic-bezier(0.16, 1, 0.3, 1), transform 0.4s cubic-bezier(0.16, 1, 0.3, 1); 
+    }
+    #toast.show { visibility: visible; opacity: 1; transform: translateX(-50%) translateY(0); bottom: 100px; }
+    
+    .idle-title { font-size: 28px; color: var(--theme-primary); margin-bottom: 12px; font-weight: 900; text-transform: uppercase; letter-spacing: 2px;}
+    
+    .quota-box { background: rgba(245, 166, 35, 0.05); border: 1px solid rgba(245, 166, 35, 0.3); padding: 12px; border-radius: 12px; margin-bottom: 16px; text-align: center; transition: all 0.5s ease;}
+    .quota-box.quota-met { background: rgba(255, 215, 0, 0.05); border-color: rgba(255, 215, 0, 0.5); box-shadow: 0 0 20px rgba(255, 215, 0, 0.15); }
+    .quota-text { font-size: 13px; font-family: 'Share Tech Mono', monospace; letter-spacing: 1px; color: var(--theme-primary); font-weight: bold;}
+    .quota-met .quota-text { color: var(--gold); }
+
+    /* Snowfall Animation for Vacation Mode */
+    #snow-container {
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100vw;
+      height: 100vh;
+      pointer-events: none;
+      z-index: 999999;
+      overflow: hidden;
+      display: none;
+    }
+    .snowflake {
+      position: absolute;
+      top: -20px;
+      color: rgba(255, 255, 255, 0.9);
+      font-size: 14px;
+      font-family: Arial, sans-serif;
+      text-shadow: 0 0 8px rgba(0, 255, 255, 0.9);
+      user-select: none;
+      pointer-events: none;
+      animation: snowflake-fall linear infinite;
+    }
+    @keyframes snowflake-fall {
+      0% {
+        transform: translateY(-20px) translateX(0) rotate(0deg);
+        opacity: 0.95;
+      }
+      50% {
+        transform: translateY(50vh) translateX(25px) rotate(180deg);
+        opacity: 0.8;
+      }
+      100% {
+        transform: translateY(105vh) translateX(-15px) rotate(360deg);
+        opacity: 0.15;
+      }
+    }
+
+    /* Mobile Edge-to-Edge App Overrides */
+    html, body {
+      width: 100% !important;
+      height: 100% !important;
+      margin: 0 !important;
+      padding: 0 !important;
+      overflow: hidden !important;
+      background-color: #030303 !important;
+      -webkit-tap-highlight-color: transparent !important;
+      user-select: none !important;
+      -webkit-user-select: none !important;
+    }
+    #app-container {
+      width: 100vw !important;
+      max-width: 100vw !important;
+      height: 100% !important;
+      max-height: 100% !important;
+      border: none !important;
+      border-radius: 0 !important;
+      box-shadow: none !important;
+      padding-top: calc(env(safe-area-inset-top, 0px) + 20px) !important;
+      padding-bottom: env(safe-area-inset-bottom, 0px) !important;
+    }
+  </style>
+</head>
+<body>
+
+<div id="snow-container"></div>
+
+<div id="app-container">
+  <div class="header" id="main-header" style="display:none;">
+    <div>
+      <div class="sys-label">SYSTEM // ARCHITECTURE <button id="btn-zen-toggle" class="btn-zen" onclick="window.toggleZenMode()" style="display:none;">[FLOW STATE]</button></div>
+      <div class="title" id="display-alias">THE SYSTEM</div>
+    </div>
+    <div style="text-align:right">
+      <div class="sys-label" id="status-label" style="text-align:right;"><span class="status-dot dot-idle"></span>STANDBY</div>
+      <div id="system-clock-display" style="font-size:11px; color:var(--text-muted); font-family: 'Share Tech Mono', monospace; text-align:right; margin-top:4px;"></div>
+      <div id="sync-status" style="margin-top:4px; font-size:11px; color:var(--text-dim); font-family: 'Share Tech Mono', monospace; text-align:right;">CONNECTING...</div>
+      <button onclick="window.logout()" style="background:transparent; border:none; color:var(--text-muted); font-size:11px; margin-top:8px; cursor:pointer; font-family:'Inter'; text-decoration:underline; transition:0.3s;">LOGOUT</button>
+    </div>
+  </div>
+
+  <!-- AUTH VIEW -->
+  <div id="view-auth" class="view-section active" style="padding-top: 60px;">
+    <div style="text-align: center; margin-bottom: 40px;">
+      <div style="font-family: 'Share Tech Mono', monospace; color: var(--theme-primary); letter-spacing: 6px; margin-bottom: 16px; animation: glitch-anim 3s infinite;">DTX_PROTOCOL</div>
+      <div class="auth-title">SYSTEM GATEWAY</div>
+      <p style="color: var(--text-dim); font-size: 14px; line-height: 1.6; padding: 0 10px;">
+        This is not a trial run. It is a permanent life system.<br>
+        Completing Deepwork rewards you with daily momentum. Slacking ruthlessly strips it away.
+      </p>
+    </div>
+    <input type="text" id="login-alias-input" class="auth-input" placeholder="Enter Secret Alias">
+    <button class="btn btn-primary" onclick="window.login()" style="margin-bottom: 16px;">LOGIN (BREACH)</button>
+    <button class="btn btn-outline" onclick="window.startOnboarding()">INITIALIZE NEW IDENTITY</button>
+  </div>
+
+  <!-- ONBOARDING WIZARD -->
+  <div id="view-onboarding" class="view-section">
+    <div class="wizard-step active" id="step-1">
+      <div class="auth-title" style="color: var(--theme-primary);">LIFETIME WARNING</div>
+      <div class="wizard-desc" style="font-size: 14px; color: var(--text);">
+        This is not a traditional habit tracker. This is an immutable life system. 
+        <strong>There is no way to delete your account or reset your points.</strong> 
+        Achieving your daily quota (starts at 1 session, dynamically scales as you adapt) increases your momentum. Failing to meet it strips momentum and penalizes points, but the system dynamically scales down to help you recover. Are you ready?
+      </div>
+      <button class="btn btn-primary" onclick="window.nextStep(2)">I UNDERSTAND, PROCEED</button>
+      <button class="btn btn-outline" onclick="window.cancelOnboarding()" style="margin-top: 12px;">CANCEL</button>
+    </div>
+    <div class="wizard-step" id="step-2">
+      <div class="auth-title">PSYCHOLOGICAL PROFILING</div>
+      <div class="wizard-q">1. What is the weak excuse you have always used to justify your downfall?</div>
+      <input type="text" id="q1-input" class="auth-input" placeholder="e.g., I was stressed, it was late..." style="text-align: left;">
+      <div class="wizard-q">2. Why did you decide to stop running and face life?</div>
+      <input type="text" id="q2-input" class="auth-input" placeholder="What pain are you paying for right now?" style="text-align: left;">
+      <button class="btn btn-primary" onclick="window.nextStep(3)">SAVE PROFILING</button>
+      <button class="btn btn-outline" onclick="window.prevStep(1)" style="margin-top: 12px;">BACK</button>
+    </div>
+    <div class="wizard-step" id="step-3">
+      <div class="auth-title">RANKS & MUTATIONS</div>
+      <div class="wizard-desc">The hierarchy of the path. Beware, points drop below zero, and the lower you go, the stronger the gravity of the fall (decay multiplier).</div>
+      <div class="rank-preview-list" id="rank-preview-container"></div>
+      <button class="btn btn-primary" onclick="window.nextStep(4)">I HAVE ASSIMILATED THE PATH</button>
+      <button class="btn btn-outline" onclick="window.prevStep(2)" style="margin-top: 12px;">BACK</button>
+    </div>
+    <div class="wizard-step" id="step-4">
+      <div class="auth-title" style="color: var(--blue);">IDENTITY CONFIGURATION</div>
+      <div class="wizard-desc">Enter your true identity or permanent alias. <strong>This name will live with you forever on the leaderboard.</strong></div>
+      <input type="text" id="register-alias-input" class="auth-input" placeholder="Alias (e.g., Shadow_99)" style="text-align: left;">
+      <div style="font-size: 11px; color: var(--text-dim); margin-top: 14px; text-align: left; font-weight: bold;">DISCIPLINE SYSTEM MODE:</div>
+      <select id="mode-select-input" class="auth-input" style="text-align: left; margin-top: 6px; font-size: 12px;">
+        <option value="positive" selected>🛡️ Positive Focus Mode (Hide self-punishment buttons - Recommended)</option>
+        <option value="hardcore">⚔️ Full Discipline Mode (Show voluntary self-punishment buttons)</option>
+      </select>
+      <button class="btn btn-primary" onclick="window.completeOnboarding()" style="background: var(--blue); color: #000; box-shadow: 0 0 20px var(--cyan-glow); margin-top: 16px;">BOOT AND PERMANENT SYNC</button>
+      <button class="btn btn-outline" onclick="window.prevStep(3)" style="margin-top: 12px;">BACK</button>
+    </div>
+  </div>
+
+  <!-- DASHBOARD TAB -->
+  <div id="view-dashboard" class="view-section">
+    <div id="main-area"></div>
+  </div>
+  
+  <!-- BATTLE TAB -->
+  <div id="view-battle" class="view-section">
+    <div id="battle-area"></div>
+  </div>
+
+  <!-- STATS TAB -->
+  <div id="view-stats" class="view-section">
+    <div class="stats-grid">
+      <!-- NEW STAT CARD FOR TOTAL STARTS -->
+      <div class="stat-card" style="grid-column: span 2; border-color: var(--purple); background: rgba(156, 39, 176, 0.03);">
+        <div class="stat-val" id="stat-starts" style="color: var(--purple); font-size: 36px; text-shadow: 0 0 15px rgba(156, 39, 176, 0.5);">0</div>
+        <div class="stat-label" style="color: var(--purple);">TOTAL INITIATIONS (100+ GOAL TO CRUSH RESISTANCE)</div>
+      </div>
+
+      <div class="stat-card" style="grid-column: span 2; border-color: var(--blue); background: rgba(0,255,255,0.03);">
+        <div class="stat-val" id="stat-battles" style="color: var(--blue); font-size: 36px;">0</div>
+        <div class="stat-label" style="color: var(--blue);">MICRO-WINS (MENTAL BATTLES)</div>
+      </div>
+      <div class="stat-card"><div class="stat-val" id="stat-current-ep">0</div><div class="stat-label">CURRENT EP</div></div>
+      <div class="stat-card"><div class="stat-val" id="stat-best-ep">0</div><div class="stat-label">PEAK EP</div></div>
+      <div class="stat-card"><div class="stat-val" id="stat-current-days">00</div><div class="stat-label">CURRENT ALIGNMENT</div></div>
+      <div class="stat-card"><div class="stat-val" id="stat-best-days">0</div><div class="stat-label">MAX ALIGNMENT</div></div>
+      <div class="stat-card"><div class="stat-val" id="stat-deepwork">0</div><div class="stat-label">DEEP WORK SESSIONS</div></div>
+      <div class="stat-card"><div class="stat-val" id="stat-bio">0</div><div class="stat-label">BIO-OPTIMIZED DAYS</div></div>
+      <div class="stat-card" style="border-color: #E23535; background: rgba(226, 53, 53, 0.02);"><div class="stat-val" id="stat-abs-streak" style="color: #E23535;">0</div><div class="stat-label">ABSOLUTE STREAK</div></div>
+      <div class="stat-card" style="border-color: #FF5722; background: rgba(255, 87, 34, 0.02);"><div class="stat-val" id="stat-max-abs-streak" style="color: #FF5722;">0</div><div class="stat-label">MAX ABSOLUTE</div></div>
+    </div>
+
+    <!-- The Neural Black Market (EP Shop) -->
+    <div class="section-title" style="color: var(--theme-primary); border-bottom-color: rgba(245, 166, 35, 0.3); margin-top: 30px;">THE NEURAL BLACK MARKET (EP Shop)</div>
+    <div style="font-size: 11px; color: var(--text-dim); margin-bottom: 16px; line-height: 1.5; text-align: center;">
+      "Divert electrical power to system subsystems. Exchange EP for hardware modules."
+    </div>
+    
+    <div class="stats-grid" style="margin-bottom: 16px;">
+      <div class="stat-card" style="border-color: var(--blue); background: rgba(0, 255, 255, 0.02);">
+        <div class="stat-val" style="color: var(--blue); font-size: 18px;">SYSTEM SHIELD</div>
+        <div class="stat-label" style="margin: 8px 0; font-size: 10px;">Blocks 1 quota failure.</div>
+        <div class="stat-val" style="font-size: 14px; font-family:'Share Tech Mono', monospace; margin-bottom: 8px;">Cost: 500 EP</div>
+        <button class="btn" style="padding: 8px; font-size: 11px; background: var(--blue); color: #000;" onclick="window.buyShopItem('shield')">BUY MODULE</button>
+      </div>
+      
+      <div class="stat-card" style="border-color: var(--theme-primary); background: rgba(245, 166, 35, 0.02);">
+        <div class="stat-val" style="color: var(--theme-primary); font-size: 18px;">MOMENTUM CATALYST</div>
+        <div class="stat-label" style="margin: 8px 0; font-size: 10px;">+0.25 Growth for 24h.</div>
+        <div class="stat-val" style="font-size: 14px; font-family:'Share Tech Mono', monospace; margin-bottom: 8px;">Cost: 800 EP</div>
+        <button class="btn" style="padding: 8px; font-size: 11px; background: var(--theme-primary); color: #000;" onclick="window.buyShopItem('catalyst')">BUY MODULE</button>
+      </div>
+      
+      <div class="stat-card" style="border-color: var(--green); background: rgba(76, 175, 80, 0.02);">
+        <div class="stat-val" style="color: var(--green); font-size: 18px;">NANITE REPAIR KIT</div>
+        <div class="stat-label" style="margin: 8px 0; font-size: 10px;">Instantly heals 0.15 damage severity.</div>
+        <div class="stat-val" style="font-size: 14px; font-family:'Share Tech Mono', monospace; margin-bottom: 8px;">Cost: 400 EP</div>
+        <button class="btn" style="padding: 8px; font-size: 11px; background: var(--green); color: #000;" onclick="window.buyShopItem('repair')">BUY MODULE</button>
+      </div>
+
+      <div class="stat-card" style="border-color: var(--purple); background: rgba(156, 39, 176, 0.02);">
+        <div class="stat-val" style="color: var(--purple); font-size: 18px;">TEMPORAL DILATOR</div>
+        <div class="stat-label" style="margin: 8px 0; font-size: 10px;">Postpones day audit by 8 hours.</div>
+        <div class="stat-val" style="font-size: 14px; font-family:'Share Tech Mono', monospace; margin-bottom: 8px;">Cost: 600 EP</div>
+        <button class="btn" style="padding: 8px; font-size: 11px; background: var(--purple); color: #fff;" onclick="window.buyShopItem('time_extender')">BUY MODULE</button>
+      </div>
+
+      <div class="stat-card" style="border-color: #FF7F50; background: rgba(255, 127, 80, 0.02); grid-column: span 2;">
+        <div class="stat-val" style="color: #FF7F50; font-size: 18px;">TEMPORAL PARDON (عفو زمني)</div>
+        <div class="stat-label" style="margin: 8px 0; font-size: 10px;">Excuses yesterday's missed goals, refunds temporal dilator, and preserves all streaks. (Max 1/week, requires active extension)</div>
+        <div class="stat-val" style="font-size: 14px; font-family:'Share Tech Mono', monospace; margin-bottom: 8px;">Cost: 1000 EP</div>
+        <button class="btn" style="padding: 8px; font-size: 11px; background: #FF7F50; color: #000; font-weight: 800;" onclick="window.buyShopItem('pardon')">ACQUIRE PARDON</button>
+      </div>
+    </div>
+    <div style="font-size: 11px; color: var(--text-dim); text-align: center; font-family: 'Share Tech Mono', monospace; margin-bottom: 30px;" id="shop-inventory-display">
+      Shields Stocked: 0 | Catalyst Expiry: None
+    </div>
+
+    <!-- Cybernetic Rebirth Panel -->
+    <div class="section-title" style="color: var(--red); border-bottom-color: rgba(226,53,53,0.3); margin-top: 30px;">NEURAL TIMELINE CONTROL</div>
+    <div style="font-size: 11px; color: var(--text-dim); margin-bottom: 16px; line-height: 1.5; text-align: center;">
+      "When a neural pathway decays beyond repair, the machine must purge and reconstruct itself."<br>
+      Resets your points, momentum, and damage. Advances you to the next System Generation.
+    </div>
+    <button class="btn btn-danger" onclick="window.triggerNeuralRebirth()" style="padding: 12px; font-size: 12px;">INITIATE NEURAL REBIRTH</button>
+  </div>
+
+  <!-- LEADERBOARD TAB -->
+  <div id="view-leaderboard" class="view-section">
+    <div class="section-title" style="color: #FFD700; border-bottom-color: rgba(255,215,0,0.3); text-align:center; font-size: 16px;">THE ELITE BOARD (LIVE)</div>
+    <div style="font-size: 12px; text-align: center; color: var(--text-dim); margin-bottom: 20px;">Click on any entity to intercept their neural stream.</div>
+    <div class="lb-list" id="leaderboard-container">
+      <div style="text-align:center; color: var(--text-dim); padding: 20px;">Fetching data from the grid...</div>
+    </div>
+  </div>
+
+  <!-- NAVIGATION -->
+  <div class="nav-tabs" id="main-nav">
+    <div class="nav-tab active" onclick="window.switchTab('dashboard')">DASH</div>
+    <div class="nav-tab" onclick="window.switchTab('battle')">CONSOLE</div>
+    <div class="nav-tab" onclick="window.switchTab('stats')">METRICS</div>
+    <div class="nav-tab" onclick="window.switchTab('leaderboard')" style="color: var(--blue);">LEADERBOARD</div>
+  </div>
+</div>
+
+<!-- MIND MODAL -->
+<div class="modal-overlay" id="mind-modal-overlay">
+  <div class="mind-modal">
+    <div class="modal-header-text">
+      <span>[ NEURAL_INTERCEPT ]</span>
+      <span id="modal-status-text" style="color:var(--green); animation:blink 2s infinite;">CONNECTED</span>
+    </div>
+    <div class="modal-target-name" id="modal-name">---</div>
+    <div class="modal-target-class" id="modal-class">---</div>
+    
+    <div class="modal-stats-grid">
+      <div class="modal-stat-box">
+        <div class="modal-stat-val" id="modal-ep">0</div>
+        <div class="modal-stat-lbl">SYSTEM_EP</div>
+      </div>
+      <div class="modal-stat-box">
+        <div class="modal-stat-val" id="modal-mult" style="color: var(--theme-primary);">1.0x</div>
+        <div class="modal-stat-lbl">GROWTH MULT</div>
+      </div>
+      <div class="modal-stat-box" style="border-color: rgba(226,53,53,0.3);">
+        <div class="modal-stat-val" id="modal-dmg" style="color: var(--red);">1.0x</div>
+        <div class="modal-stat-lbl" style="color: var(--red);">DECAY MULT</div>
+      </div>
+      <div class="modal-stat-box" style="border-color: rgba(226,53,53,0.3); grid-column: span 3; display: flex; justify-content: space-around; padding: 6px 12px; align-items: center;">
+        <span style="font-size: 10px; color: var(--text-dim); font-family: 'Share Tech Mono', monospace;">ABSOLUTE STREAK: <strong id="modal-abs-streak" style="color: #E23535; font-size: 12px;">0</strong></span>
+        <span style="font-size: 10px; color: var(--text-dim); font-family: 'Share Tech Mono', monospace;">MAX ABSOLUTE: <strong id="modal-max-abs-streak" style="color: #FF5722; font-size: 12px;">0</strong></span>
+      </div>
+    </div>
+
+    <div class="thought-container">
+      <div class="thought-label">CURRENT_THOUGHT_STREAM // LIVE</div>
+      <div class="thought-text" id="modal-thought">...</div>
+    </div>
+
+    <button class="btn-outline" style="border-color: var(--blue); color: var(--blue); font-size:13px; padding:12px; margin-top: 10px; width: 100%;" onclick="window.closeMind()">SEVER CONNECTION</button>
+  </div>
+</div>
+
+<!-- ANOMALY MODAL -->
+<div class="modal-overlay" id="anomaly-modal-overlay">
+  <div class="mind-modal" style="border-color: var(--theme-primary); box-shadow: 0 0 40px rgba(245, 166, 35, 0.25);">
+    <div class="modal-header-text" style="color: var(--theme-primary);">
+      <span>[ SYSTEM_ANOMALY_DETECTED ]</span>
+      <span style="color:var(--red); animation:blink 1.5s infinite;">CRITICAL EVENT</span>
+    </div>
+    <div class="modal-target-name" style="color: var(--theme-primary); font-size: 20px; margin-bottom: 8px;">EMERGENCY PROTOCOL</div>
+    <div style="font-size: 11px; color: var(--text-dim); line-height: 1.5; margin-bottom: 20px;" id="anomaly-desc-text">
+      A dopamine receptor mismatch has caused a neural instability. To restore system equilibrium, select and commit to one of the recovery protocols below. Rewards are massive; neglect is penalized.
+    </div>
+    
+    <div style="display: flex; flex-direction: column; gap: 10px; margin-bottom: 20px;" id="anomaly-options-container">
+      <!-- Options injected dynamically -->
+    </div>
+    
+    <div style="display: flex; gap: 10px;">
+      <button class="btn" style="background: var(--theme-primary); color: #000; padding: 12px; font-size: 12px;" onclick="window.acceptSideQuest()" id="btn-accept-anomaly" disabled>ACCEPT PROTOCOL</button>
+      <button class="btn-outline" style="border-color: var(--text-muted); color: var(--text-muted); padding: 12px; font-size: 12px; flex: 1;" onclick="window.deferSideQuest()" id="btn-defer-anomaly">DEFER (NO PENALTY)</button>
+    </div>
+  </div>
+</div>
+
+<div id="toast">System updated.</div>
+
+<script type="module">
+  import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
+  import { getAuth, onAuthStateChanged, signInAnonymously } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
+  import { getFirestore, doc, setDoc, getDoc, collection, onSnapshot, getDocs, initializeFirestore, query, orderBy, limit } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+
+  const firebaseConfig = {
+    apiKey: "AIzaSyB9rkgig2gJDOqfVIKhpofi5m88-WrPmLg",
+    authDomain: "math-23e48.firebaseapp.com",
+    projectId: "math-23e48",
+    storageBucket: "math-23e48.firebasestorage.app",
+    messagingSenderId: "93836752684",
+    appId: "1:93836752684:web:5ed039a4bf2815134fde89"
+  };
+
+  const DB_PATH = 'DTX';
+
+  let app, auth, db;
+  let currentUserAlias = null;
+  let allCachedUsers = []; 
+  
+  const strugglerAudio = new Audio('https://ia902807.us.archive.org/20/items/reel-audio-40954/ReelAudio-40954.mp3');
+  strugglerAudio.loop = true;
+  
+  let timeOffset = 0;
+  let timeVerified = false;
+
+  function getNow() { return Date.now() + timeOffset; }
+
+  function getCasablancaDateStr(ts) {
+    return new Intl.DateTimeFormat('en-CA', {
+      timeZone: 'Africa/Casablanca',
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit'
+    }).format(new Date(ts));
+  }
+
+  function getCasablancaHours(ts) {
+    return parseInt(new Intl.DateTimeFormat('en-US', {
+      timeZone: 'Africa/Casablanca',
+      hour: 'numeric',
+      hour12: false
+    }).format(new Date(ts)));
+  }
+
+  function parseDateStr(str) {
+    const parts = str.split('-');
+    return new Date(Date.UTC(parseInt(parts[0]), parseInt(parts[1]) - 1, parseInt(parts[2])));
+  }
+  
+  const RANKS = [
+    { ep: -250000, name: 'System Death', prob: 'TERMINAL', color: '#444444', fx: 'fx-glitch', desc: 'Continuous mindless consumption. No awareness, only blind response to stimuli.' },
+    { ep: -50000, name: 'The Abyss', prob: '---', color: '#555555', fx: 'none', desc: 'Total detachment from reality. A faded spectator in your own life.' },
+    { ep: -10000, name: 'Ghost', prob: '---', color: '#660000', fx: 'none', desc: 'Willpower depleted. Dense mental fog and constant justification of weakness.' },
+    { ep: -2000, name: 'Fallen', prob: '---', color: '#8B0000', fx: 'none', desc: 'Slave to what you hate. Waking up requires a bloody battle with yourself.' },
+    { ep: -500, name: 'Compromised', prob: '---', color: '#B22222', fx: 'none', desc: 'The system bleeds. Cheap dopamine takes the wheel step by step.' },
+    { ep: -100, name: 'Slipping', prob: '---', color: '#D2691E', fx: 'none', desc: 'Losing grip. The descent starts with a small justification and one exception.' },
+    { ep: 0, name: 'Fragmented Mind', prob: '99.0%', color: '#6B6045', fx: 'none', desc: 'Slave to cheap dopamine.' },
+    { ep: 250, name: 'Awakened', prob: '50.0%', color: '#8b9467', fx: 'none', desc: 'Starting to engineer the environment.' },
+    { ep: 1000, name: 'System Builder', prob: '20.0%', color: '#4CAF50', fx: 'none', desc: 'Replacing willpower with routine.' },
+    { ep: 5000, name: 'Architect', prob: '5.0%', color: '#2196F3', fx: 'none', desc: 'Frictionless execution.' },
+    { ep: 20000, name: 'Elite', prob: '1.0%', color: '#9C27B0', fx: 'none', desc: 'Outperforms 99% via deep work.' },
+    { ep: 100000, name: 'Antifragile', prob: '0.1%', color: '#F5A623', fx: 'none', desc: 'Difficulty makes the system stronger.' },
+    { ep: 500000, name: 'The Machine', prob: '0.01%', color: '#E23535', fx: 'none', desc: 'Emotions detached. Pure output.' },
+    { ep: 2500000, name: 'Phenomenon', prob: '0.001%', color: '#FF0055', fx: 'none', desc: 'Total biological dominance.' },
+    { ep: 10000000, name: 'Demigod', prob: '0.0001%', color: '#00FFFF', fx: 'fx-god', desc: 'Absolute conscious control.' },
+    { ep: 50000000, name: 'Mutation', prob: '0.00001%', color: '#FF00FF', fx: 'fx-god', desc: 'Neural pathways rewritten.' },
+    { ep: 250000000, name: 'System Glitch', prob: '0.0000001%', color: '#FFFFFF', fx: 'fx-glitch', desc: 'Operating outside human parameters.' },
+    { ep: 1000000000, name: 'Absolute Mastery', prob: '0.00000001%', color: '#FFD700', fx: 'fx-absolute', desc: 'You have beaten the game.' }
+  ];
+
+  const defaultState = { 
+    startTs: null, 
+    bestStreakDays: 0, 
+    bestEp: 0, 
+    actionHistory: [], 
+    baseActionEp: 0, 
+    multiplierDamage: 0,
+    systemMomentum: 0, 
+    quest: { status: 'none', text: '', ts: null },
+    dailyAudit: { lastDate: getCasablancaDateStr(Date.now()), deepWorkCount: 0, targetQuota: 1, targetMinutes: 45, successStreak: 0, deepWorkMinutesToday: 0, gracePeriodUntil: null, absoluteStreak: 0, maxAbsoluteStreak: 0 },
+    zenMode: false,
+    stats: { resisted: 0, deepWork: 0, cold: 0, bioOptimized: 0, battlesWon: 0, startsCount: 0 },
+    isBot: false,
+    generation: 1,
+    inventory: { shields: 0, boostActive: false, boostUntil: null, timeExtenders: 0 },
+    sideQuest: { status: 'none', date: getCasablancaDateStr(Date.now()), linguisticDates: [], linguisticSteps: [false, false, false, false] },
+    challenge: { status: 'inactive', currentStreak: 0, totalResets: 0, startDate: null, startTs: null, tier: 'gold' },
+    recoveryQuest: { status: 'none', date: null, activeQuest: null },
+    showPenaltyButtons: false,
+    allowSuddenAnomalies: false,
+    timeFrozen: false
+  };
+  
+  let state = { ...defaultState };
+  let intervalId = null;
+  let isLoaded = false;
+  let isOffline = !navigator.onLine;
+
+  window.addEventListener('online', () => { isOffline = false; if(currentUserAlias) initCloud(); render(); });
+  window.addEventListener('offline', () => { isOffline = true; render(); });
+
+  function pad(n) { return String(Math.floor(n)).padStart(2, '0'); }
+  
+  async function syncSecureTime() {
+    try {
+      let fetchOpts = {};
+      let timeoutId = null;
+      if (typeof AbortController !== 'undefined') {
+        const controller = new AbortController();
+        timeoutId = setTimeout(() => controller.abort(), 4000);
+        fetchOpts.signal = controller.signal;
+      }
+      const res = await fetch('https://worldtimeapi.org/api/timezone/Africa/Casablanca', fetchOpts);
+      if (timeoutId) clearTimeout(timeoutId);
+      const data = await res.json();
+      if (data && data.utc_datetime) {
+        const secureTime = new Date(data.utc_datetime).getTime();
+        timeOffset = secureTime - Date.now();
+        timeVerified = true;
+        console.log("Secure time synced (WorldTimeAPI). Offset:", timeOffset);
+        return;
+      }
+    } catch (e) {
+      console.warn("WorldTimeAPI failed, attempting TimeAPI.io...", e);
+    }
+
+    try {
+      let fetchOpts = {};
+      let timeoutId = null;
+      if (typeof AbortController !== 'undefined') {
+        const controller = new AbortController();
+        timeoutId = setTimeout(() => controller.abort(), 4000);
+        fetchOpts.signal = controller.signal;
+      }
+      const res = await fetch('https://timeapi.io/api/Time/current/zone?timeZone=Africa/Casablanca', fetchOpts);
+      if (timeoutId) clearTimeout(timeoutId);
+      const data = await res.json();
+      if (data && data.dateTime) {
+        const secureTime = new Date(data.dateTime).getTime();
+        timeOffset = secureTime - Date.now();
+        timeVerified = true;
+        console.log("Secure time synced (TimeAPI.io). Offset:", timeOffset);
+        return;
+      }
+    } catch (e) {
+      console.warn("TimeAPI.io failed. Falling back to local clock.", e);
+    }
+  }
+
+  function getSystemMode(ep) {
+    if (ep < 0) {
+      return { 
+        name: 'RECOVERY', 
+        penaltyScale: 0.5, 
+        rewardScale: 0.8, 
+        maxQuota: 2, 
+        desc: 'Neural strain detected. Gravity dampened.' 
+      };
+    }
+    if (ep >= 20000) {
+      return { 
+        name: 'MACHINE', 
+        penaltyScale: 1.5, 
+        rewardScale: 1.5, 
+        maxQuota: 4, 
+        desc: 'Extreme calibration. Stake limits amplified.' 
+      };
+    }
+    return { 
+      name: 'STANDARD', 
+      penaltyScale: 1.0, 
+      rewardScale: 1.0, 
+      maxQuota: 3, 
+      desc: 'Standard architectural protocol active.' 
+    };
+  }
+
+  function hasSingleTargetMinOnDate(s, dateStr, minReq) {
+    if (!s || !s.actionHistory) return false;
+    return s.actionHistory.some(a => {
+      if (a.type !== 'deepwork') return false;
+      return getCasablancaDateStr(a.ts) === dateStr && (a.duration || 90) >= minReq;
+    });
+  }
+
+  function getMinDeepWorkDuration(ep) {
+    return 5;
+  }
+
+  window.selectedAnomalyIndex = null;
+  window.selectAnomalyOption = function(index) {
+    window.selectedAnomalyIndex = index;
+    state.sideQuest.options.forEach((opt, idx) => {
+      const card = document.getElementById(`anomaly-opt-${idx}`);
+      if (card) {
+        if (idx === index) {
+          card.style.borderColor = 'var(--theme-primary)';
+          card.style.background = 'rgba(245, 166, 35, 0.05)';
+        } else {
+          card.style.borderColor = 'var(--border)';
+          card.style.background = '#000';
+        }
+      }
+    });
+    const acceptBtn = document.getElementById('btn-accept-anomaly');
+    if (acceptBtn) acceptBtn.disabled = false;
+  };
+
+  window.acceptSideQuest = async function() {
+    if (!state.sideQuest || (state.sideQuest.status !== 'pending_choice' && state.sideQuest.status !== 'pending_mandatory')) return;
+    if (state.sideQuest.status === 'pending_choice' && (window.selectedAnomalyIndex === null || window.selectedAnomalyIndex === undefined)) return;
+    
+    const selected = state.sideQuest.status === 'pending_mandatory' 
+      ? state.sideQuest.selectedOption 
+      : state.sideQuest.options[window.selectedAnomalyIndex];
+      
+    state.sideQuest.selectedOption = selected;
+    state.sideQuest.status = 'active';
+    if (selected.type === 'linguistic') {
+      state.sideQuest.linguisticSteps = [false, false, false, false];
+    }
+    
+    if (!state.actionHistory) state.actionHistory = [];
+    state.actionHistory.unshift({
+      id: getNow(),
+      type: 'side_quest_accepted',
+      questType: selected.type,
+      ep: 0,
+      actualEp: 0,
+      multAtTime: '1.00',
+      multDmg: 0,
+      momGain: 0,
+      ts: getNow()
+    });
+    
+    showToast(`Emergency Protocol accepted: ${selected.type.toUpperCase()}`);
+    render();
+    await saveData();
+  };
+
+  window.deferSideQuest = async function() {
+    if (!state.sideQuest || state.sideQuest.status !== 'pending_choice') return;
+    
+    state.sideQuest.status = 'none';
+    showToast("Emergency protocol deferred. Equilibrium maintained.");
+    render();
+    await saveData();
+  };
+
+  window.customizeDailyGoals = async function() {
+    if (!state.startTs) return;
+    if (!state.dailyAudit) {
+      state.dailyAudit = { lastDate: getCasablancaDateStr(getNow()), deepWorkCount: 0, targetQuota: 1, targetMinutes: 45, successStreak: 0, deepWorkMinutesToday: 0, gracePeriodUntil: null, absoluteStreak: 0, maxAbsoluteStreak: 0 };
+    }
+
+    const currentQ = state.dailyAudit.targetQuota || 1;
+    const currentM = state.dailyAudit.targetMinutes || 45;
+
+    const qInput = prompt("Enter required daily Deep Work sessions count (Min: 1, Current: " + currentQ + "):", currentQ);
+    if (qInput === null) return;
+    const parsedQ = parseInt(qInput, 10);
+    if (isNaN(parsedQ) || parsedQ < 1) {
+      showToast("Invalid sessions count. Must be at least 1.", true);
+      return;
+    }
+
+    const mInput = prompt("Enter target Deep Work session duration in minutes (Minimum allowed: 25m, Current: " + currentM + "m):", currentM);
+    if (mInput === null) return;
+    const parsedM = parseInt(mInput, 10);
+    if (isNaN(parsedM) || parsedM < 25) {
+      showToast("Invalid duration. Minimum target duration cannot be lower than 25 minutes.", true);
+      return;
+    }
+
+    state.dailyAudit.targetQuota = parsedQ;
+    state.dailyAudit.targetMinutes = parsedM;
+
+    showToast(`🎯 Daily Goal Updated: ${parsedQ} session(s) of ${parsedM}m+ target.`, false);
+    render();
+    await saveData();
+  };
+
+  window.togglePenaltyButtons = async function() {
+    if (!state.startTs) return;
+    state.showPenaltyButtons = !state.showPenaltyButtons;
+    if (state.showPenaltyButtons) {
+      showToast("⚔️ FULL DISCIPLINE MODE: Voluntary self-punishment buttons enabled.");
+    } else {
+      showToast("🛡️ POSITIVE FOCUS MODE: Self-punishment buttons hidden. Focus on positive progress!");
+    }
+    render();
+    await saveData();
+  };
+
+  window.toggleSuddenAnomalies = async function() {
+    if (!state.startTs) return;
+    if (state.allowSuddenAnomalies === undefined) state.allowSuddenAnomalies = false;
+    state.allowSuddenAnomalies = !state.allowSuddenAnomalies;
+    if (!state.allowSuddenAnomalies) {
+      if (state.sideQuest) {
+        state.sideQuest.status = 'none';
+      }
+      showToast("🛡️ SUDDEN ANOMALIES DISABLED: Random emergency quests turned OFF.");
+    } else {
+      showToast("⚡ SUDDEN ANOMALIES ENABLED: Random emergency quests turned ON.");
+    }
+    render();
+    await saveData();
+  };
+
+  window.toggleTimeFreeze = async function() {
+    if (!state.startTs) return;
+    if (state.timeFrozen === undefined) state.timeFrozen = false;
+    state.timeFrozen = !state.timeFrozen;
+    if (state.timeFrozen) {
+      showToast("🧊 TIME FROZEN: Vacation mode active. Daily penalties paused.");
+    } else {
+      state.dailyAudit.lastDate = getCasablancaDateStr(getNow());
+      showToast("⚡ TIME UNFROZEN: System reactivated. Welcome back!");
+    }
+    render();
+    await saveData();
+  };
+
+  function updateSnowfall() {
+    const container = document.getElementById('snow-container');
+    if (!container) return;
+
+    if (state.timeFrozen) {
+      container.style.display = 'block';
+      if (container.children.length === 0) {
+        const flakeChars = ['❄', '❅', '❆', '•'];
+        const count = 45;
+        for (let i = 0; i < count; i++) {
+          const flake = document.createElement('div');
+          flake.className = 'snowflake';
+          flake.innerText = flakeChars[Math.floor(Math.random() * flakeChars.length)];
+          
+          const left = Math.random() * 100;
+          const size = 10 + Math.random() * 18;
+          const duration = 4 + Math.random() * 6;
+          const delay = Math.random() * 5;
+          const opacity = 0.5 + Math.random() * 0.5;
+
+          flake.style.left = `${left}vw`;
+          flake.style.fontSize = `${size}px`;
+          flake.style.animationDuration = `${duration}s`;
+          flake.style.animationDelay = `${delay}s`;
+          flake.style.opacity = opacity;
+          container.appendChild(flake);
+        }
+      }
+    } else {
+      container.style.display = 'none';
+      container.innerHTML = '';
+    }
+  }
+
+  window.declareManualQuestComplete = async function() {
+    if (!state.sideQuest || state.sideQuest.status !== 'active') return;
+    
+    const option = state.sideQuest.selectedOption;
+    if (option.type !== 'blackout' && option.type !== 'linguistic') return;
+
+    if (option.type === 'linguistic') {
+      const steps = state.sideQuest.linguisticSteps || [false, false, false, false];
+      if (!steps.every(Boolean)) {
+        showToast("Complete all checklist objectives first.", true);
+        return;
+      }
+    }
+    
+    const metrics = calculateMetrics();
+    const currentMult = parseFloat(metrics.positiveMult);
+    const sideQuestEpAdded = Math.floor(option.epReward * currentMult);
+    
+    state.baseActionEp += sideQuestEpAdded;
+    state.systemMomentum = (state.systemMomentum || 0) + option.momReward;
+    
+    let sqHealed = 0;
+    if (state.multiplierDamage > 0 && option.damageHeal > 0) {
+      sqHealed = Math.min(state.multiplierDamage, option.damageHeal);
+      state.multiplierDamage = Math.max(0, state.multiplierDamage - option.damageHeal);
+    }
+    
+    state.sideQuest.status = 'success';
+    
+    if (!state.actionHistory) state.actionHistory = [];
+    state.actionHistory.unshift({
+      id: getNow(),
+      type: 'side_quest_success',
+      questType: option.type,
+      ep: option.epReward,
+      actualEp: sideQuestEpAdded,
+      multAtTime: currentMult.toFixed(2),
+      multDmg: -sqHealed,
+      momGain: option.momReward,
+      ts: getNow()
+    });
+    
+    showToast(`⚡ EMERGENCY PROTOCOL COMPLETED: +${sideQuestEpAdded} EP & Momentum surge!`);
+    render();
+    await saveData();
+  };
+
+  window.toggleLinguisticStep = async function(index) {
+    if (!state.sideQuest || state.sideQuest.status !== 'active') return;
+    if (!state.sideQuest.linguisticSteps) {
+      state.sideQuest.linguisticSteps = [false, false, false, false];
+    }
+    state.sideQuest.linguisticSteps[index] = !state.sideQuest.linguisticSteps[index];
+    render();
+    await saveData();
+  };
+
+  function generateSideQuestOptions(ep) {
+    const currentMetrics = calculateMetrics();
+    const minDW = getMinDeepWorkDuration(currentMetrics.ep);
+    const dwTarget = minDW + 30; 
+    
+    return [
+      {
+        type: 'deepwork',
+        label: `Intellectual Overload: Complete a Deep Work session of at least ${dwTarget} minutes today.`,
+        targetMinutes: dwTarget,
+        epReward: 250,
+        momReward: 0.30,
+        damageHeal: 0.15
+      },
+      {
+        type: 'workout',
+        label: "Physical Overdrive: Forge your body to absolute failure (high intensity workout/run to failure).",
+        epReward: 200,
+        momReward: 0.20,
+        damageHeal: 0.25
+      },
+      {
+        type: 'blackout',
+        label: "Digital Blackout: Freeze all leisure screens/cheap dopamine for 6 consecutive hours today.",
+        epReward: 220,
+        momReward: 0.25,
+        damageHeal: 0.10
+      }
+    ];
+  }
+
+  window.buyShopItem = async function(itemId) {
+    const metrics = calculateMetrics();
+    let cost = 0;
+    if (itemId === 'shield') cost = 500;
+    else if (itemId === 'catalyst') cost = 800;
+    else if (itemId === 'repair') cost = 400;
+    else if (itemId === 'time_extender') cost = 600;
+    else if (itemId === 'pardon') {
+      cost = 1000;
+      
+      const inGrace = state.dailyAudit?.gracePeriodUntil && (getNow() < state.dailyAudit.gracePeriodUntil);
+      if (!inGrace) {
+        showToast("Pardon can only be acquired during an active Temporal Extension (grace period).", true);
+        return;
+      }
+
+      const todayStr = getCasablancaDateStr(getNow());
+      if (state.dailyAudit.lastPardonDate) {
+        const lastPardonObj = parseDateStr(state.dailyAudit.lastPardonDate);
+        const todayObj = parseDateStr(todayStr);
+        const daysSincePardon = Math.round((todayObj - lastPardonObj) / 86400000);
+        if (daysSincePardon < 7) {
+          showToast(`Pardon protocol on cooldown. Wait ${7 - daysSincePardon} more days.`, true);
+          return;
+        }
+      }
+    }
+
+    if (metrics.ep < cost) {
+      showToast("Insufficient EP to purchase this item.", true);
+      return;
+    }
+
+    state.baseActionEp -= cost;
+
+    if (!state.inventory) state.inventory = { shields: 0, boostActive: false, boostUntil: null };
+
+    if (itemId === 'shield') {
+      state.inventory.shields = (state.inventory.shields || 0) + 1;
+      showToast("Shield acquired. System protected against next failure.");
+    } else if (itemId === 'catalyst') {
+      state.inventory.boostActive = true;
+      const currentExpiry = state.inventory.boostUntil && state.inventory.boostUntil > getNow() 
+        ? state.inventory.boostUntil 
+        : getNow();
+      state.inventory.boostUntil = currentExpiry + (24 * 60 * 60 * 1000);
+      showToast("Catalyst injected. Growth multiplier boosted for 24h.");
+    } else if (itemId === 'repair') {
+      const oldDmg = state.multiplierDamage || 0;
+      state.multiplierDamage = Math.max(0, oldDmg - 0.15);
+      showToast(`Nanites activated. Healed ${(oldDmg - state.multiplierDamage).toFixed(2)} damage.`);
+    } else if (itemId === 'time_extender') {
+      state.inventory.timeExtenders = (state.inventory.timeExtenders || 0) + 1;
+      showToast("Temporal Extender purchased. Auto-activates on failure to grant 8h grace period.");
+    } else if (itemId === 'pardon') {
+      const todayStr = getCasablancaDateStr(getNow());
+      state.dailyAudit.gracePeriodUntil = null;
+      state.dailyAudit.lastDate = todayStr;
+      state.dailyAudit.deepWorkCount = 0;
+      state.dailyAudit.deepWorkMinutesToday = 0;
+      state.dailyAudit.lastPardonDate = todayStr;
+      state.dailyAudit.absoluteStreak = 0;
+      
+      if (state.challenge && state.challenge.status === 'active') {
+        state.challenge.currentStreak++;
+      }
+      
+      showToast("👑 Pardon applied: streaks protected, grace period resolved.");
+    }
+
+    if (!state.actionHistory) state.actionHistory = [];
+    state.actionHistory.unshift({
+      id: getNow(),
+      type: 'shop_purchase',
+      itemId: itemId,
+      ep: -cost,
+      actualEp: -cost,
+      multAtTime: '1.00',
+      multDmg: itemId === 'repair' ? -0.15 : 0,
+      momGain: 0,
+      ts: getNow()
+    });
+
+    render();
+    await saveData();
+  };
+
+  function showToast(msg, isError = false) {
+    const toast = document.getElementById('toast');
+    toast.innerText = msg;
+    toast.style.backgroundColor = isError ? 'var(--red)' : 'var(--green)';
+    if(msg.includes('Tactical') || msg.includes('Legendary') || msg.includes('Root')) toast.style.backgroundColor = 'var(--blue)'; 
+    if(msg.includes('SYSTEM UPGRADE') || msg.includes('REBIRTH')) toast.style.backgroundColor = 'var(--gold)'; 
+    if(msg.includes('Threshold')) toast.style.backgroundColor = 'var(--purple)'; 
+    toast.className = "show";
+    setTimeout(() => { toast.className = toast.className.replace("show", ""); }, 4000);
+  }
+
+  function formatActionTime(ts) {
+    const date = new Date(ts);
+    const now = new Date(getNow());
+    const isToday = date.getDate() === now.getDate() && date.getMonth() === now.getMonth() && date.getFullYear() === now.getFullYear();
+    const yesterday = new Date(now);
+    yesterday.setDate(now.getDate() - 1);
+    const isYesterday = date.getDate() === yesterday.getDate() && date.getMonth() === yesterday.getMonth() && date.getFullYear() === yesterday.getFullYear();
+
+    const timeStr = date.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' });
+    if (isToday) return `Today, ${timeStr}`;
+    if (isYesterday) return `Yesterday, ${timeStr}`;
+    return `${date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}, ${timeStr}`;
+  }
+
+  function calcMetrics(userData) {
+    if (!userData.startTs) return { days:0, hours:0, mins:0, secs:0, ep:0, positiveMult:1.00, negativeMult: 1.00, rawDamage: 0, momentum: 0 };
+    const diff = Math.max(0, getNow() - userData.startTs);
+    const elapsedSecs = diff / 1000;
+    const elapsedDays = diff / 86400000;
+    
+    const d = Math.floor(elapsedDays);
+    const h = Math.floor(diff / 3600000) % 24;
+    const m = Math.floor(diff / 60000) % 60;
+    const s = Math.floor(diff / 1000) % 60;
+    
+    const damage = userData.multiplierDamage || 0;
+    const momentum = userData.systemMomentum || 0;
+    
+    const isBoosted = userData.inventory?.boostActive && userData.inventory?.boostUntil && userData.inventory.boostUntil > getNow();
+    let posMult = Math.max(1.0, 1.0 + (momentum * 0.4) - (damage * 0.5) + (isBoosted ? 0.25 : 0));
+    let negMult = Math.max(1.0, 1.0 + (damage * 1.5) - (momentum * 0.1)); 
+
+    const timeEpBase = (elapsedSecs / 3600) * 5 * posMult; 
+    const totalEp = Math.floor(timeEpBase + (userData.baseActionEp || 0));
+
+    return { 
+        days: d, hours: h, mins: m, secs: s, 
+        ep: totalEp, 
+        positiveMult: posMult.toFixed(2), 
+        negativeMult: negMult.toFixed(2), 
+        rawDamage: damage,
+        momentum: momentum
+    };
+  }
+
+  function calculateMetrics() { return calcMetrics(state); }
+
+  function auditOtherUser(userData, secureDateStr) {
+    if (!userData.startTs || !userData.dailyAudit) return null;
+    if (userData.timeFrozen) {
+      if (userData.dailyAudit.lastDate !== secureDateStr) {
+        userData.dailyAudit.lastDate = secureDateStr;
+        userData.dailyAudit.deepWorkCount = 0;
+        userData.dailyAudit.deepWorkMinutesToday = 0;
+        return userData;
+      }
+      return null;
+    }
+
+    if (userData.dailyAudit.lastDate !== secureDateStr) {
+      const inGrace = userData.dailyAudit.gracePeriodUntil && (getNow() < userData.dailyAudit.gracePeriodUntil);
+      if (inGrace) return null;
+
+      const isChallengeActive = userData.challenge && userData.challenge.status === 'active';
+      const minutesToday = userData.dailyAudit.deepWorkMinutesToday || 0;
+      const targetQuota = userData.dailyAudit.targetQuota || 1;
+      const targetMinutes = userData.dailyAudit.targetMinutes || 45;
+      const challengeFailed = isChallengeActive && (minutesToday < 90);
+      const dwCountToday = userData.dailyAudit.deepWorkCount || 0;
+      
+      const quotaMet = (minutesToday >= (targetQuota * targetMinutes)) || hasSingleTargetMinOnDate(userData, userData.dailyAudit.lastDate, targetMinutes) || (dwCountToday >= targetQuota && minutesToday >= targetMinutes);
+      const quotaFailed = !quotaMet;
+
+      if ((challengeFailed || quotaFailed) && userData.inventory && userData.inventory.timeExtenders > 0) {
+        userData.inventory.timeExtenders--;
+        userData.dailyAudit.gracePeriodUntil = getNow() + (8 * 60 * 60 * 1000);
+        if (!userData.actionHistory) userData.actionHistory = [];
+        userData.actionHistory.unshift({
+          id: getNow(),
+          type: 'time_extender_consume',
+          ep: 0,
+          actualEp: 0,
+          multAtTime: '1.00',
+          multDmg: 0,
+          momGain: 0,
+          ts: getNow()
+        });
+        return userData;
+      }
+
+      userData.dailyAudit.gracePeriodUntil = null;
+      const lastDateObj = parseDateStr(userData.dailyAudit.lastDate);
+      const todayObj = parseDateStr(secureDateStr);
+
+      const daysPassed = Math.round((todayObj - lastDateObj) / 86400000);
+      if (daysPassed > 0) {
+        let totalPenalties = 0;
+        let successfulDays = 0;
+        let successStreak = userData.dailyAudit.successStreak || 0;
+        let newTargetQuota = userData.dailyAudit.targetQuota || 1;
+        let penaltyFactor = 1.0;
+
+        if (userData.sideQuest && userData.sideQuest.status === 'active') {
+          userData.sideQuest.status = 'failed';
+          const metrics = calcMetrics(userData);
+          const currentNegMult = parseFloat(metrics.negativeMult);
+          const isLinguistic = userData.sideQuest.selectedOption.type === 'linguistic';
+          const epDeduct = isLinguistic ? -150 : -100;
+          const dmgAdd = isLinguistic ? 0.3 : 0.2;
+          const actualEpPenalty = Math.floor(epDeduct * currentNegMult);
+          userData.baseActionEp = (userData.baseActionEp || 0) + actualEpPenalty;
+          userData.multiplierDamage = (userData.multiplierDamage || 0) + dmgAdd;
+          if (!userData.actionHistory) userData.actionHistory = [];
+          userData.actionHistory.unshift({
+            id: getNow() - 200,
+            type: 'side_quest_failed',
+            questType: userData.sideQuest.selectedOption.type,
+            ep: epDeduct,
+            actualEp: actualEpPenalty,
+            multAtTime: currentNegMult.toFixed(2),
+            multDmg: dmgAdd,
+            momGain: 0,
+            ts: getNow() - 200
+          });
+        }
+
+        if (userData.challenge && userData.challenge.status === 'active') {
+          const tier = userData.challenge.tier || 'gold';
+          const targets = { bronze: 45, silver: 60, gold: 90 };
+          const durations = { bronze: 7, silver: 10, gold: 14 };
+          const targetMin = targets[tier] || 90;
+          const duration = durations[tier] || 14;
+          
+          const startDayStr = userData.challenge.startTs ? getCasablancaDateStr(userData.challenge.startTs) : null;
+          const startHour = userData.challenge.startTs ? getCasablancaHours(userData.challenge.startTs) : 0;
+          const isStartDay = (startDayStr === userData.dailyAudit.lastDate);
+          const skipToday = isStartDay && (startHour >= 19);
+
+          if (!skipToday) {
+            const minutesToday = userData.dailyAudit.deepWorkMinutesToday || 0;
+            if (minutesToday >= targetMin) {
+              userData.challenge.currentStreak++;
+              if (userData.challenge.currentStreak >= duration) {
+                userData.challenge.status = 'completed';
+                const rewards = {
+                  bronze: { ep: 400, mom: 0.4, dmg: 0.2 },
+                  silver: { ep: 700, mom: 0.7, dmg: 0.35 },
+                  gold: { ep: 1000, mom: 1.0, dmg: 0.5 }
+                };
+                const r = rewards[tier] || rewards.gold;
+                userData.baseActionEp = (userData.baseActionEp || 0) + r.ep;
+                userData.systemMomentum = (userData.systemMomentum || 0) + r.mom;
+                userData.multiplierDamage = Math.max(0, (userData.multiplierDamage || 0) - r.dmg);
+                
+                if (!userData.actionHistory) userData.actionHistory = [];
+                userData.actionHistory.unshift({
+                  id: getNow() - 300,
+                  type: 'challenge_completed',
+                  ep: r.ep,
+                  actualEp: r.ep,
+                  multAtTime: '1.00',
+                  multDmg: -r.dmg,
+                  momGain: r.mom,
+                  ts: getNow() - 300
+                });
+              }
+            } else {
+              userData.challenge.totalResets++;
+              userData.challenge.currentStreak = 0;
+              if (userData.challenge.totalResets >= 3) {
+                userData.challenge.status = 'failed';
+                const penalties = {
+                  bronze: { ep: -400, dmg: 0.4 },
+                  silver: { ep: -700, dmg: 0.6 },
+                  gold: { ep: -1000, dmg: 0.8 }
+                };
+                const p = penalties[tier] || penalties.gold;
+                userData.baseActionEp = (userData.baseActionEp || 0) + p.ep;
+                userData.multiplierDamage = (userData.multiplierDamage || 0) + p.dmg;
+                userData.systemMomentum = 0;
+                
+                if (!userData.actionHistory) userData.actionHistory = [];
+                userData.actionHistory.unshift({
+                  id: getNow() - 300,
+                  type: 'challenge_failed',
+                  ep: p.ep,
+                  actualEp: p.ep,
+                  multAtTime: '1.00',
+                  multDmg: p.dmg,
+                  momGain: 0,
+                  ts: getNow() - 300
+                });
+              }
+            }
+          }
+        }
+
+        const metrics = calcMetrics(userData);
+        const sysMode = getSystemMode(metrics.ep);
+
+        if (quotaMet) {
+          successfulDays += 1;
+          successStreak += 1;
+          
+          userData.dailyAudit.absoluteStreak = (userData.dailyAudit.absoluteStreak || 0) + 1;
+          userData.dailyAudit.maxAbsoluteStreak = Math.max(userData.dailyAudit.maxAbsoluteStreak || 0, userData.dailyAudit.absoluteStreak);
+
+          if (successStreak >= 3 || dwCountToday > targetQuota) {
+            newTargetQuota = Math.min(sysMode.maxQuota, targetQuota + 1);
+            successStreak = 0;
+          }
+        } else {
+          userData.dailyAudit.absoluteStreak = 0;
+          if (userData.inventory && userData.inventory.shields > 0) {
+            userData.inventory.shields -= 1;
+            if (!userData.actionHistory) userData.actionHistory = [];
+            userData.actionHistory.unshift({
+              id: getNow() - 500,
+              type: 'shield_consume',
+              ep: 0,
+              actualEp: 0,
+              multAtTime: '1.00',
+              multDmg: 0,
+              momGain: 0,
+              ts: getNow() - 500
+            });
+            successStreak = 0;
+          } else {
+            totalPenalties += 1;
+            penaltyFactor = (targetQuota - dwCountToday) / targetQuota;
+            successStreak = 0;
+            newTargetQuota = Math.max(1, targetQuota - 1);
+          }
+        }
+
+        let extraMissedDays = daysPassed - 1;
+        if (extraMissedDays > 0) {
+          let shieldsAvailable = userData.inventory?.shields || 0;
+          let shieldedExtra = Math.min(extraMissedDays, shieldsAvailable);
+          if (shieldedExtra > 0) {
+            userData.inventory.shields -= shieldedExtra;
+            extraMissedDays -= shieldedExtra;
+            if (!userData.actionHistory) userData.actionHistory = [];
+            for (let i = 0; i < shieldedExtra; i++) {
+              userData.actionHistory.unshift({
+                id: getNow() - 501 - i,
+                type: 'shield_consume',
+                ep: 0,
+                actualEp: 0,
+                multAtTime: '1.00',
+                multDmg: 0,
+                momGain: 0,
+                ts: getNow() - 501 - i
+              });
+            }
+          }
+          if (extraMissedDays > 0) {
+            totalPenalties += extraMissedDays;
+            newTargetQuota = 1;
+            successStreak = 0;
+          }
+        }
+
+        const currentPosMult = parseFloat(metrics.positiveMult);
+        const currentNegMult = parseFloat(metrics.negativeMult);
+
+        if (!userData.actionHistory) userData.actionHistory = [];
+
+        if (successfulDays > 0) {
+          const rewardEpBase = Math.floor(100 * (userData.dailyAudit.targetQuota || 1) * successfulDays * sysMode.rewardScale);
+          const actualRewardEp = Math.floor(rewardEpBase * currentPosMult);
+          const momGain = 0.25 * (userData.dailyAudit.targetQuota || 1) * successfulDays;
+          userData.baseActionEp = (userData.baseActionEp || 0) + actualRewardEp;
+          userData.systemMomentum = (userData.systemMomentum || 0) + momGain;
+          userData.multiplierDamage = Math.max(0, (userData.multiplierDamage || 0) - 0.2);
+          userData.actionHistory.unshift({
+            id: getNow() - 1000,
+            type: 'daily_success',
+            ep: rewardEpBase,
+            actualEp: actualRewardEp,
+            multAtTime: currentPosMult.toFixed(2),
+            multDmg: -0.2,
+            momGain: momGain,
+            ts: getNow() - 1000
+          });
+        }
+
+        if (totalPenalties > 0) {
+          const penaltyEpPerDay = -150;
+          const dmgIncrPerDay = 0.5;
+          const momLossPerDay = 0.6;
+          const totalPenaltyEp = (penaltyEpPerDay * penaltyFactor + (penaltyEpPerDay * extraMissedDays)) * sysMode.penaltyScale;
+          const totalDmgIncr = (dmgIncrPerDay * penaltyFactor + (dmgIncrPerDay * extraMissedDays)) * sysMode.penaltyScale;
+          const totalMomLoss = (momLossPerDay * penaltyFactor + (momLossPerDay * extraMissedDays)) * sysMode.penaltyScale;
+          const actualEpDropped = Math.floor(totalPenaltyEp * currentNegMult);
+          userData.baseActionEp = (userData.baseActionEp || 0) + actualEpDropped;
+          userData.multiplierDamage = (userData.multiplierDamage || 0) + totalDmgIncr;
+          let actualMomLost = 0;
+          if ((userData.systemMomentum || 0) > 0) {
+            actualMomLost = Math.min(userData.systemMomentum, totalMomLoss);
+            userData.systemMomentum = Math.max(0, userData.systemMomentum - totalMomLoss);
+          }
+          userData.actionHistory.unshift({
+            id: getNow(),
+            type: 'atrophy',
+            ep: Math.floor(totalPenaltyEp),
+            actualEp: actualEpDropped,
+            multAtTime: currentNegMult.toFixed(2),
+            multDmg: totalDmgIncr,
+            momGain: -actualMomLost,
+            ts: getNow()
+          });
+        }
+
+        userData.dailyAudit.lastDate = secureDateStr;
+        userData.dailyAudit.deepWorkCount = 0;
+        userData.dailyAudit.deepWorkMinutesToday = 0;
+        userData.dailyAudit.targetQuota = newTargetQuota;
+        userData.dailyAudit.successStreak = successStreak;
+        return userData;
+      }
+    }
+    return null;
+  }
+
+  function getCurrentRank(ep) {
+    let currentRank = RANKS[0];
+    let nextRank = RANKS[1];
+    for (let i = 0; i < RANKS.length; i++) {
+      if (ep >= RANKS[i].ep) { 
+        currentRank = RANKS[i]; 
+        nextRank = RANKS[i+1] || RANKS[i]; 
+      }
+    }
+    let progress = 100;
+    if (currentRank.ep !== nextRank.ep) { 
+        progress = Math.min(100, Math.max(0, ((ep - currentRank.ep) / (nextRank.ep - currentRank.ep)) * 100)); 
+    }
+    return { ...currentRank, progress, nextEp: nextRank.ep };
+  }
+
+  function applyTheme(rank) {
+    const root = document.documentElement;
+    const container = document.getElementById('app-container');
+    if (state.timeFrozen) {
+      root.style.setProperty('--theme-primary', '#00FFFF');
+      root.style.setProperty('--theme-glow', 'rgba(0, 255, 255, 0.2)');
+      container.classList.remove('fx-god', 'fx-glitch', 'fx-absolute');
+    } else {
+      root.style.setProperty('--theme-primary', rank.color);
+      root.style.setProperty('--theme-glow', rank.color + '4D');
+      container.classList.remove('fx-god', 'fx-glitch', 'fx-absolute');
+      if (rank.fx !== 'none') container.classList.add(rank.fx);
+    }
+  }
+
+  // --- DAILY AUDIT SYSTEM ---
+  async function runDailyAudit() {
+    if (!state.startTs || isOffline || !currentUserAlias) return;
+    
+    const todayStr = getCasablancaDateStr(getNow());
+    
+    if (!state.dailyAudit) {
+      state.dailyAudit = { lastDate: todayStr, deepWorkCount: 0, targetQuota: 1, targetMinutes: 45, successStreak: 0, deepWorkMinutesToday: 0, gracePeriodUntil: null, absoluteStreak: 0, maxAbsoluteStreak: 0 };
+      await saveData();
+      return;
+    }
+
+    if (state.dailyAudit.lastDate !== todayStr) {
+      if (state.timeFrozen) {
+        state.dailyAudit.lastDate = todayStr;
+        state.dailyAudit.deepWorkCount = 0;
+        state.dailyAudit.deepWorkMinutesToday = 0;
+        await saveData();
+        render();
+        return;
+      }
+
+      const inGracePeriod = state.dailyAudit.gracePeriodUntil && (getNow() < state.dailyAudit.gracePeriodUntil);
+      if (inGracePeriod) {
+        return;
+      }
+
+      const isChallengeActive = state.challenge && state.challenge.status === 'active';
+      const minutesToday = state.dailyAudit.deepWorkMinutesToday || 0;
+      const targetQuota = state.dailyAudit.targetQuota || 1;
+      const targetMinutes = state.dailyAudit.targetMinutes || 45;
+      const challengeFailed = isChallengeActive && (minutesToday < 90);
+      
+      const dwCountToday = state.dailyAudit.deepWorkCount || 0;
+      const quotaMet = (minutesToday >= (targetQuota * targetMinutes)) || hasSingleTargetMinOnDate(state, state.dailyAudit.lastDate, targetMinutes) || (dwCountToday >= targetQuota && minutesToday >= targetMinutes);
+      const quotaFailed = !quotaMet;
+      
+      if ((challengeFailed || quotaFailed) && state.inventory && state.inventory.timeExtenders > 0) {
+        state.inventory.timeExtenders--;
+        state.dailyAudit.gracePeriodUntil = getNow() + (8 * 60 * 60 * 1000); 
+        
+        if (!state.actionHistory) state.actionHistory = [];
+        state.actionHistory.unshift({
+          id: getNow(),
+          type: 'time_extender_consume',
+          ep: 0,
+          actualEp: 0,
+          multAtTime: '1.00',
+          multDmg: 0,
+          momGain: 0,
+          ts: getNow()
+        });
+        
+        setTimeout(() => {
+          showToast("⏳ TEMPORAL DILATOR CONSUMED: 8-hour grace period active. Complete your goals!", false);
+        }, 1000);
+        
+        await saveData();
+        render();
+        return;
+      }
+      
+      state.dailyAudit.gracePeriodUntil = null;
+      const lastDateObj = parseDateStr(state.dailyAudit.lastDate);
+      const todayObj = parseDateStr(todayStr);
+      
+      const daysPassed = Math.round((todayObj - lastDateObj) / 86400000);
+      
+      if (daysPassed > 0) {
+        let totalPenalties = 0;
+        let successfulDays = 0;
+
+        if (state.sideQuest && state.sideQuest.status === 'active') {
+          state.sideQuest.status = 'failed';
+          
+          const metrics = calculateMetrics();
+          const currentNegMult = parseFloat(metrics.negativeMult);
+          
+          const isLinguistic = state.sideQuest.selectedOption.type === 'linguistic';
+          const epDeduct = isLinguistic ? -150 : -100;
+          const dmgAdd = isLinguistic ? 0.3 : 0.2;
+          
+          const actualEpPenalty = Math.floor(epDeduct * currentNegMult);
+          
+          state.baseActionEp += actualEpPenalty;
+          state.multiplierDamage = (state.multiplierDamage || 0) + dmgAdd;
+          
+          if (!state.actionHistory) state.actionHistory = [];
+          state.actionHistory.unshift({
+            id: getNow() - 200,
+            type: 'side_quest_failed',
+            questType: state.sideQuest.selectedOption.type,
+            ep: epDeduct,
+            actualEp: actualEpPenalty,
+            multAtTime: currentNegMult.toFixed(2),
+            multDmg: dmgAdd,
+            momGain: 0,
+            ts: getNow() - 200
+          });
+          setTimeout(() => {
+            showToast(isLinguistic ? "⚠ MANDATORY PROTOCOL FAILED: Severe damage and EP penalty." : "⚠ ANOMALY QUEST FAILED: System damage incurred and EP penalized.", true);
+          }, 2000);
+        }
+
+        if (state.challenge && state.challenge.status === 'active') {
+          const tier = state.challenge.tier || 'gold';
+          const targets = { bronze: 45, silver: 60, gold: 90 };
+          const durations = { bronze: 7, silver: 10, gold: 14 };
+          const targetMin = targets[tier] || 90;
+          const duration = durations[tier] || 14;
+          
+          const startDayStr = state.challenge.startTs ? getCasablancaDateStr(state.challenge.startTs) : null;
+          const startHour = state.challenge.startTs ? getCasablancaHours(state.challenge.startTs) : 0;
+          
+          const isStartDay = (startDayStr === state.dailyAudit.lastDate);
+          const skipToday = isStartDay && (startHour >= 19);
+          
+          if (skipToday) {
+            setTimeout(() => {
+              showToast("🌅 CRUCIBLE: First day evaluation skipped (started after 19:00). Challenge officially starts tomorrow!", false);
+            }, 3000);
+          } else {
+            const minutesToday = state.dailyAudit.deepWorkMinutesToday || 0;
+            if (minutesToday >= targetMin) {
+              state.challenge.currentStreak++;
+              if (state.challenge.currentStreak >= duration) {
+                state.challenge.status = 'completed';
+                
+                const rewards = {
+                  bronze: { ep: 400, mom: 0.4, dmg: 0.2 },
+                  silver: { ep: 700, mom: 0.7, dmg: 0.35 },
+                  gold: { ep: 1000, mom: 1.0, dmg: 0.5 }
+                };
+                const r = rewards[tier] || rewards.gold;
+                state.baseActionEp += r.ep;
+                state.systemMomentum = (state.systemMomentum || 0) + r.mom;
+                state.multiplierDamage = Math.max(0, (state.multiplierDamage || 0) - r.dmg);
+                
+                if (!state.actionHistory) state.actionHistory = [];
+                state.actionHistory.unshift({
+                  id: getNow() - 300,
+                  type: 'challenge_completed',
+                  ep: r.ep,
+                  actualEp: r.ep,
+                  multAtTime: '1.00',
+                  multDmg: -r.dmg,
+                  momGain: r.mom,
+                  ts: getNow() - 300
+                });
+                
+                setTimeout(() => {
+                  showToast(`🏆 NEURAL CRUCIBLE CONQUERED! ${duration} days of ${targetMin}m Deep Work completed.`, false);
+                }, 3000);
+              } else {
+                setTimeout(() => {
+                  showToast(`🔥 CRUCIBLE PROGRESS: Day ${state.challenge.currentStreak}/${duration} completed.`, false);
+                }, 3000);
+              }
+            } else {
+              state.challenge.totalResets++;
+              state.challenge.currentStreak = 0;
+              
+              if (state.challenge.totalResets >= 3) {
+                state.challenge.status = 'failed';
+                
+                const penalties = {
+                  bronze: { ep: -400, dmg: 0.4 },
+                  silver: { ep: -700, dmg: 0.6 },
+                  gold: { ep: -1000, dmg: 0.8 }
+                };
+                const p = penalties[tier] || penalties.gold;
+                state.baseActionEp += p.ep;
+                state.multiplierDamage = (state.multiplierDamage || 0) + p.dmg;
+                state.systemMomentum = 0;
+                
+                if (!state.actionHistory) state.actionHistory = [];
+                state.actionHistory.unshift({
+                  id: getNow() - 300,
+                  type: 'challenge_failed',
+                  ep: p.ep,
+                  actualEp: p.ep,
+                  multAtTime: '1.00',
+                  multDmg: p.dmg,
+                  momGain: 0,
+                  ts: getNow() - 300
+                });
+                
+                setTimeout(() => {
+                  showToast("🚨 CRUCIBLE PROTOCOL FAILED: Reset 3 times. Critical system collapse.", true);
+                }, 3000);
+              } else {
+                setTimeout(() => {
+                  showToast(`⚠️ CRUCIBLE RESET: No ${targetMin}m session logged today. Streak reset to Day 1. Resets: ${state.challenge.totalResets}/3`, true);
+                }, 3000);
+              }
+            }
+          }
+        }
+
+        let currentQuota = state.dailyAudit.targetQuota || 1;
+        let tMinutes = state.dailyAudit.targetMinutes || 45;
+        let successStreak = state.dailyAudit.successStreak || 0;
+        let deepWorkCount = state.dailyAudit.deepWorkCount || 0;
+        const totalReqMins = currentQuota * tMinutes;
+        
+        let penaltyFactor = 1.0;
+
+        const metrics = calculateMetrics();
+        const sysMode = getSystemMode(metrics.ep);
+
+        const quotaMet = (minutesToday >= totalReqMins) || hasSingleTargetMinOnDate(state, state.dailyAudit.lastDate, tMinutes) || (deepWorkCount >= currentQuota && minutesToday >= totalReqMins);
+        if (quotaMet) {
+          successfulDays += 1;
+          successStreak += 1;
+          
+          state.dailyAudit.absoluteStreak = (state.dailyAudit.absoluteStreak || 0) + 1;
+          state.dailyAudit.maxAbsoluteStreak = Math.max(state.dailyAudit.maxAbsoluteStreak || 0, state.dailyAudit.absoluteStreak);
+          
+          if (successStreak >= 3 || deepWorkCount > currentQuota) {
+            currentQuota = Math.min(sysMode.maxQuota, currentQuota + 1);
+            successStreak = 0;
+          }
+        } else {
+          state.dailyAudit.absoluteStreak = 0;
+          if (state.inventory && state.inventory.shields > 0) {
+            state.inventory.shields -= 1;
+            if (!state.actionHistory) state.actionHistory = [];
+            state.actionHistory.unshift({
+              id: getNow() - 500,
+              type: 'shield_consume',
+              ep: 0,
+              actualEp: 0,
+              multAtTime: '1.00',
+              multDmg: 0,
+              momGain: 0,
+              ts: getNow() - 500
+            });
+            setTimeout(() => {
+              showToast("🛡️ SYSTEM SHIELD: Active day failure shielded. Quota preserved.", false);
+            }, 1000);
+            successStreak = 0; 
+          } else {
+            totalPenalties += 1;
+            penaltyFactor = (currentQuota - deepWorkCount) / currentQuota;
+            successStreak = 0;
+            currentQuota = Math.max(1, currentQuota - 1);
+          }
+        }
+
+        let extraMissedDays = daysPassed - 1;
+        if (extraMissedDays > 0) {
+          let shieldsAvailable = state.inventory?.shields || 0;
+          let shieldedExtra = Math.min(extraMissedDays, shieldsAvailable);
+          
+          if (shieldedExtra > 0) {
+            if (!state.inventory) state.inventory = { shields: 0, boostActive: false, boostUntil: null };
+            state.inventory.shields -= shieldedExtra;
+            extraMissedDays -= shieldedExtra;
+            if (!state.actionHistory) state.actionHistory = [];
+            for (let i = 0; i < shieldedExtra; i++) {
+              state.actionHistory.unshift({
+                id: getNow() - 501 - i,
+                type: 'shield_consume',
+                ep: 0,
+                actualEp: 0,
+                multAtTime: '1.00',
+                multDmg: 0,
+                momGain: 0,
+                ts: getNow() - 501 - i
+              });
+            }
+            setTimeout(() => {
+              showToast(`🛡️ SYSTEM SHIELD: Protected against ${shieldedExtra} extra missed day(s).`, false);
+            }, 1500);
+          }
+          
+          if (extraMissedDays > 0) {
+            totalPenalties += extraMissedDays;
+            currentQuota = 1;
+            successStreak = 0;
+          }
+        }
+
+        const currentPosMult = parseFloat(metrics.positiveMult);
+        const currentNegMult = parseFloat(metrics.negativeMult);
+
+        if (!state.actionHistory) state.actionHistory = [];
+
+        if (successfulDays > 0) {
+            const rewardEpBase = Math.floor(100 * (state.dailyAudit.targetQuota || 1) * successfulDays * sysMode.rewardScale);
+            const actualRewardEp = Math.floor(rewardEpBase * currentPosMult);
+            const momGain = 0.25 * (state.dailyAudit.targetQuota || 1) * successfulDays; 
+            
+            state.baseActionEp += actualRewardEp;
+            state.systemMomentum = (state.systemMomentum || 0) + momGain;
+            state.multiplierDamage = Math.max(0, (state.multiplierDamage || 0) - 0.2); 
+
+            state.actionHistory.unshift({ 
+              id: getNow() - 1000, type: 'daily_success', 
+              ep: rewardEpBase, actualEp: actualRewardEp, multAtTime: currentPosMult.toFixed(2), multDmg: -0.2, momGain: momGain, ts: getNow() - 1000 
+            });
+            showToast(`🌟 SYSTEM UPGRADE: Daily Quota Conquered. Momentum +${momGain.toFixed(2)}.`, false);
+        }
+
+        if (totalPenalties > 0) {
+            const penaltyEpPerDay = -150;
+            const dmgIncrPerDay = 0.5;
+            const momLossPerDay = 0.6; 
+
+            const totalPenaltyEp = (penaltyEpPerDay * penaltyFactor + (penaltyEpPerDay * extraMissedDays)) * sysMode.penaltyScale;
+            const totalDmgIncr = (dmgIncrPerDay * penaltyFactor + (dmgIncrPerDay * extraMissedDays)) * sysMode.penaltyScale;
+            const totalMomLoss = (momLossPerDay * penaltyFactor + (momLossPerDay * extraMissedDays)) * sysMode.penaltyScale;
+
+            const actualEpDropped = Math.floor(totalPenaltyEp * currentNegMult);
+            state.baseActionEp += actualEpDropped;
+            state.multiplierDamage = (state.multiplierDamage || 0) + totalDmgIncr;
+            
+            let actualMomLost = 0;
+            if ((state.systemMomentum || 0) > 0) {
+                actualMomLost = Math.min(state.systemMomentum, totalMomLoss);
+                state.systemMomentum = Math.max(0, state.systemMomentum - totalMomLoss);
+            }
+
+            state.actionHistory.unshift({ 
+              id: getNow(), type: 'atrophy', 
+              ep: Math.floor(totalPenaltyEp), actualEp: actualEpDropped, multAtTime: currentNegMult.toFixed(2), multDmg: totalDmgIncr, momGain: -actualMomLost, ts: getNow() 
+            });
+            showToast(`⚠ SYSTEM ATROPHY: Missed or fell short of quota. Momentum shattered (-${actualMomLost.toFixed(2)}).`, true);
+        }
+
+        const oldQuota = state.dailyAudit.targetQuota || 1;
+        state.dailyAudit.lastDate = todayStr;
+        state.dailyAudit.deepWorkCount = 0;
+        state.dailyAudit.deepWorkMinutesToday = 0;
+        state.dailyAudit.targetQuota = currentQuota;
+        state.dailyAudit.successStreak = successStreak;
+
+        if (!state.sideQuest) state.sideQuest = { status: 'none', date: todayStr, linguisticDates: [] };
+        if (!state.sideQuest.linguisticDates) state.sideQuest.linguisticDates = [];
+
+        const sevenDaysAgo = getNow() - (7 * 24 * 60 * 60 * 1000);
+        state.sideQuest.linguisticDates = state.sideQuest.linguisticDates.filter(dStr => {
+          const dObj = new Date(dStr);
+          return dObj.getTime() >= sevenDaysAgo;
+        });
+
+        if (state.allowSuddenAnomalies) {
+          let triggeredLinguistic = false;
+          if (state.sideQuest.linguisticDates.length < 2) {
+            if (Math.random() < 0.20) {
+              triggeredLinguistic = true;
+              state.sideQuest.linguisticDates.push(todayStr);
+              
+              state.sideQuest.status = 'pending_mandatory';
+              state.sideQuest.date = todayStr;
+              state.sideQuest.selectedOption = {
+                type: 'linguistic',
+                label: "Linguistic Decoding: Choose a foreign song, dialogue, or speech you love (English/French), understand its full meaning, try to pronounce it, record yourself, and review words in Anki.",
+                epReward: 300,
+                momReward: 0.35,
+                damageHeal: 0.20
+              };
+            }
+          }
+
+          if (!triggeredLinguistic) {
+            const triggerRoll = Math.random() < 0.15;
+            if (triggerRoll) {
+              state.sideQuest.status = 'pending_choice';
+              state.sideQuest.date = todayStr;
+              state.sideQuest.options = generateSideQuestOptions(state.baseActionEp);
+            } else {
+              state.sideQuest.status = 'none';
+              state.sideQuest.date = todayStr;
+            }
+          }
+        } else {
+          state.sideQuest.status = 'none';
+          state.sideQuest.date = todayStr;
+        }
+
+        await saveData();
+        render();
+
+        if (currentQuota > oldQuota) {
+          setTimeout(() => {
+            showToast(`📈 CAPACITY UPGRADE: Quota raised to ${currentQuota} sessions.`, false);
+          }, 4500);
+        } else if (currentQuota < oldQuota) {
+          setTimeout(() => {
+            showToast(`📉 CAPACITY DOWNGRADE: Quota scaled back to ${currentQuota} session(s).`, true);
+          }, 4500);
+        }
+      }
+    }
+  }
+
+
+  const BOT_PROFILES = {
+    'Doom_Scroller': { class: 'Algorithmic Slave', type: 'sloth', logic: (ticks, data) => { return { ep: -(ticks * 1), dmg: ticks * 0.02 }; } },
+    'The_Architect': { class: 'System Thinker', type: 'prodigy', logic: (ticks, data) => { let ep = ticks * 1.5; let dmg = 0; return { ep: Math.floor(ep), dmg: dmg }; } },
+    'Survivor': { class: 'The Mud Fighter', type: 'fighter', logic: (ticks, data) => { 
+        let currentEp = data.baseActionEp || 0;
+        let failChance = 0.50; 
+        
+        if (currentEp > 5000) failChance = 0.10; 
+        else if (currentEp > 1000) failChance = 0.25; 
+        else if (currentEp > 250) failChance = 0.40; 
+
+        let totalEp = 0, totalDmg = 0, totalMom = 0;
+        let dmgMult = Math.max(1.0, 1.0 + ((data.multiplierDamage || 0) * 1.5) - ((data.systemMomentum || 0) * 0.1));
+        let posMult = Math.max(1.0, 1.0 + ((data.systemMomentum || 0) * 0.4) - ((data.multiplierDamage || 0) * 0.5));
+
+        for (let i = 0; i < ticks; i++) {
+            if (Math.random() > failChance) {
+                totalEp += Math.floor(3 * posMult); totalDmg -= 0.01; totalMom += 0.01;
+                posMult = Math.max(1.0, 1.0 + (((data.systemMomentum||0) + totalMom) * 0.4) - Math.max(0, ((data.multiplierDamage||0) + totalDmg) * 0.5));
+            } else {
+                totalEp -= Math.floor(4 * dmgMult); totalDmg += 0.03; totalMom -= 0.02; 
+                dmgMult = Math.max(1.0, 1.0 + (((data.multiplierDamage||0) + totalDmg) * 1.5) - Math.max(0, ((data.systemMomentum||0) + totalMom) * 0.1)); 
+            }
+        }
+        return { ep: totalEp, dmg: totalDmg, mom: totalMom };
+    } }
+  };
+
+  async function initBotsIfNeeded() {
+    if (isOffline) return;
+    try {
+      for (let alias in BOT_PROFILES) {
+        const botRef = doc(db, DB_PATH, alias);
+        const snap = await getDoc(botRef);
+        if (!snap.exists()) {
+          await setDoc(botRef, { 
+            alias: alias, isBot: true, botType: BOT_PROFILES[alias].type,
+            startTs: getNow(), baseActionEp: 0, multiplierDamage: 0, lastBotUpdate: getNow()
+          });
+        }
+      }
+    } catch (e) { console.error("Error init bots", e); }
+  }
+
+  async function simulateBots() {
+    if (isOffline) return;
+    try {
+      const configRef = doc(db, DB_PATH, "__system_config__");
+      const configSnap = await getDoc(configRef);
+      
+      let lastBotSimulationTs = 0;
+      let configData = {};
+      if (configSnap.exists()) {
+        configData = configSnap.data();
+        lastBotSimulationTs = configData.lastBotSimulationTs || 0;
+      } else {
+        await setDoc(configRef, { isSystemConfig: true, lastBotSimulationTs: 0 });
+      }
+
+      const timeSinceLastSimulation = getNow() - lastBotSimulationTs;
+      const SIMULATION_INTERVAL = 3600000;
+
+      if (timeSinceLastSimulation < SIMULATION_INTERVAL) {
+        console.log(`Skipping bot simulation. Last run was ${Math.round(timeSinceLastSimulation / 60000)}m ago.`);
+        return;
+      }
+
+      await setDoc(configRef, { ...configData, lastBotSimulationTs: getNow() }, { merge: true });
+
+      for (let alias in BOT_PROFILES) {
+        const botRef = doc(db, DB_PATH, alias);
+        const botSnap = await getDoc(botRef);
+        if (botSnap.exists()) {
+          let data = botSnap.data();
+          const timePassed = getNow() - (data.lastBotUpdate || data.startTs);
+          const TICK_RATE = 600000; 
+          
+          if (timePassed >= TICK_RATE) {
+            let ticks = Math.floor(timePassed / TICK_RATE);
+            ticks = Math.min(ticks, 100); 
+
+            const profile = BOT_PROFILES[data.alias];
+            if (profile) {
+              const result = profile.logic(ticks, data);
+              let appliedEpDrop = result.ep < 0 ? Math.floor(result.ep * Math.max(1.0, 1.0 + (data.multiplierDamage||0) * 1.5 - (data.systemMomentum||0)*0.1)) : result.ep;
+              
+              let newBaseEp = (data.baseActionEp || 0) + appliedEpDrop;
+              let newDamage = Math.max(0, (data.multiplierDamage || 0) + (result.dmg || 0));
+              let newMomentum = Math.max(0, (data.systemMomentum || 0) + (result.mom || 0));
+              
+              await setDoc(botRef, {
+                ...data, baseActionEp: newBaseEp, multiplierDamage: newDamage, systemMomentum: newMomentum,
+                lastBotUpdate: getNow() - (timePassed % TICK_RATE) 
+              }, {merge: true});
+            }
+          }
+        }
+      }
+      console.log("Bot simulation executed successfully.");
+    } catch (e) { console.error("Error simulating bots", e); }
+  }
+
+  function getBotThought(botData, metrics) {
+    const alias = botData.alias;
+    const dmg = metrics.rawDamage;
+    const ep = metrics.ep;
+
+    if (alias === 'Survivor') {
+      if (ep > 10000) return "The pain of regret weighs tons; the pain of discipline weighs ounces. Keep forging yourself.";
+      if (ep > 5000) return "Do not trust motivation. Build a fortress of habits so strong that your darkest days cannot breach it.";
+      if (ep > 1000) return "When the urge to quit whispers, recognize it as an enemy, not your own voice. Kill it.";
+      if (dmg > 0.3) return "You fell? Good. Now you know where the trap is. Analyze, repair, and attack again.";
+      return "Consistency isn't about never falling. It's about violently refusing to stay on the ground.";
+    }
+
+    if (alias === 'Doom_Scroller') return "Every minute you spend watching someone else live their dream, you are actively burying your own. Put the phone down.";
+    if (alias === 'The_Architect') return "Amateurs rely on willpower. Professionals engineer their environment. Remove the friction from good habits.";
+    
+    return "Processing environmental data... Silence the noise.";
+  }
+
+  window.openMind = function(alias) {
+    const target = allCachedUsers.find(u => u.alias === alias);
+    if (!target) return;
+
+    document.getElementById('modal-name').innerText = target.alias;
+    document.getElementById('modal-ep').innerText = target.ep.toLocaleString();
+    document.getElementById('modal-mult').innerText = target.metrics.positiveMult + 'x';
+    document.getElementById('modal-dmg').innerText = target.metrics.negativeMult + 'x';
+    document.getElementById('modal-abs-streak').innerText = target.raw.dailyAudit?.absoluteStreak || 0;
+    document.getElementById('modal-max-abs-streak').innerText = target.raw.dailyAudit?.maxAbsoluteStreak || 0;
+    
+    if (target.isBot) {
+      document.getElementById('modal-class').innerText = BOT_PROFILES[target.alias]?.class || 'UNKNOWN ENTITY';
+      document.getElementById('modal-thought').innerText = getBotThought(target.raw, target.metrics);
+    } else {
+      document.getElementById('modal-class').innerText = 'HUMAN OPERATOR';
+      document.getElementById('modal-thought').innerText = (target.alias === currentUserAlias) 
+        ? "You are looking at your own reflection. Stop staring and get back to work." 
+        : "Human neural patterns detected. Intentions unknown. Fighting the same battle.";
+    }
+
+    if (alias === 'Survivor') {
+      strugglerAudio.currentTime = 0;
+      strugglerAudio.play().catch(e => console.log("Audio play blocked by browser:", e));
+    }
+
+    document.getElementById('mind-modal-overlay').classList.add('active');
+  };
+
+  window.closeMind = function() {
+    strugglerAudio.pause();
+    strugglerAudio.currentTime = 0;
+    document.getElementById('mind-modal-overlay').classList.remove('active');
+  };
+
+  window.loadLeaderboard = async function() {
+    if (isOffline) {
+      document.getElementById('leaderboard-container').innerHTML = '<div style="text-align:center; color:var(--red); padding:20px;">You are offline. Cannot access grid.</div>';
+      return;
+    }
+    document.getElementById('leaderboard-container').innerHTML = '<div style="text-align:center; color:var(--theme-primary); padding:20px; animation:blink 1s infinite;">Breaching database for rankings...</div>';
+    
+    await simulateBots();
+
+    try {
+      const q = query(collection(db, DB_PATH), orderBy("baseActionEp", "desc"), limit(100));
+      const querySnapshot = await getDocs(q);
+      let users = [];
+      const secureDateStr = getCasablancaDateStr(getNow());
+      let currentUserFound = false;
+      const threeDaysAgo = getNow() - (3 * 24 * 60 * 60 * 1000);
+      
+      for (const docSnap of querySnapshot.docs) {
+        let data = docSnap.data();
+        if (data.alias) {
+          if (data.alias === currentUserAlias) currentUserFound = true;
+          
+          if (!data.isBot && data.alias !== currentUserAlias && data.dailyAudit) {
+            try {
+              const updatedData = auditOtherUser(data, secureDateStr);
+              if (updatedData) {
+                if (updatedData.actionHistory) {
+                  updatedData.actionHistory = updatedData.actionHistory.filter(a => a.ts >= threeDaysAgo);
+                }
+                console.log(`Decentralized Audit: Auditing inactive user ${data.alias}.`);
+                await setDoc(doc(db, DB_PATH, data.alias), updatedData, { merge: true });
+                data = updatedData;
+              }
+            } catch (auditErr) {
+              console.error(`Failed to audit other user ${data.alias}:`, auditErr);
+            }
+          }
+          
+          let m = calcMetrics(data);
+          let rank = getCurrentRank(m.ep);
+          users.push({ alias: data.alias, ep: m.ep, isBot: data.isBot, rankName: rank.name, metrics: m, raw: data });
+        }
+      }
+
+      if (!currentUserFound && currentUserAlias) {
+        const myDoc = await getDoc(doc(db, DB_PATH, currentUserAlias));
+        if (myDoc.exists()) {
+          let data = myDoc.data();
+          let m = calcMetrics(data);
+          let rank = getCurrentRank(m.ep);
+          users.push({ alias: data.alias, ep: m.ep, isBot: data.isBot, rankName: rank.name, metrics: m, raw: data });
+        }
+      }
+
+      users.sort((a, b) => b.ep - a.ep);
+      allCachedUsers = users; 
+
+      let html = '';
+      users.forEach((u, index) => {
+        let rankClass = '';
+        if (index === 0) rankClass = 'gold-rank';
+        else if (index === 1) rankClass = 'silver-rank';
+        else if (index === 2) rankClass = 'bronze-rank';
+
+        let isMeClass = u.alias === currentUserAlias ? 'is-me' : '';
+        let isBotClass = u.isBot ? 'is-bot' : '';
+        let botTag = u.isBot ? `<span class="lb-bot-tag">[bot]</span>` : '';
+
+        html += `
+          <div class="lb-item ${isMeClass} ${isBotClass}" onclick="window.openMind('${u.alias}')">
+            <div class="lb-rank-num ${rankClass}">#${index + 1}</div>
+            <div class="lb-info">
+              <div class="lb-name">${u.alias} ${botTag}</div>
+              <div class="lb-level" style="${u.ep < 0 ? 'color:var(--red);' : ''}">${u.rankName}</div>
+            </div>
+            <div class="lb-ep" style="${u.ep < 0 ? 'color:var(--red);' : ''}">${u.ep.toLocaleString()} EP</div>
+          </div>
+        `;
+      });
+      document.getElementById('leaderboard-container').innerHTML = html;
+    } catch (e) {
+      document.getElementById('leaderboard-container').innerHTML = '<div style="text-align:center; color:var(--red); padding:20px;">Connection to central database failed.</div>';
+    }
+  }
+
+  // --- UI CONTROLS ---
+
+  window.switchTab = function(tabId) {
+    document.querySelectorAll('.nav-tab').forEach(t => t.classList.remove('active'));
+    document.querySelectorAll('.view-section').forEach(s => s.classList.remove('active'));
+    
+    document.getElementById(`view-${tabId}`).classList.add('active');
+    
+    const activeTab = Array.from(document.querySelectorAll('.nav-tab')).find(t => t.getAttribute('onclick').includes(tabId));
+    if (activeTab) activeTab.classList.add('active');
+
+    if (tabId === 'leaderboard') {
+      window.loadLeaderboard();
+    }
+  };
+
+  function setView(viewId) {
+    document.querySelectorAll('.view-section').forEach(s => s.classList.remove('active'));
+    document.getElementById(viewId).classList.add('active');
+    
+    if (viewId === 'view-dashboard') {
+      document.getElementById('main-header').style.display = 'flex';
+      document.getElementById('main-nav').style.display = 'flex';
+      document.getElementById('display-alias').innerText = `${currentUserAlias} // GEN ${state.generation || 1}`;
+    } else {
+      document.getElementById('main-header').style.display = 'none';
+      document.getElementById('main-nav').style.display = 'none';
+    }
+  }
+
+  window.toggleZenMode = async function() {
+    state.zenMode = !state.zenMode;
+    render();
+    await saveData();
+    if(state.zenMode) showToast("Flow State Active. Detach from outcomes.");
+  };
+
+  window.startChallenge = async function(tier = 'gold') {
+    if (state.challenge && state.challenge.status === 'active') return;
+    
+    const targets = { bronze: 45, silver: 60, gold: 90 };
+    const durations = { bronze: 7, silver: 10, gold: 14 };
+    const targetMin = targets[tier] || 90;
+    const dur = durations[tier] || 14;
+    const tierName = tier === 'bronze' ? 'Bronze' : (tier === 'silver' ? 'Silver' : 'Gold');
+    
+    const confirmStart = confirm(`⚠️ CRUCIBLE PROTOCOL INITIATION:\n\nAre you sure you want to engage the ${dur}-Day ${targetMin}-Minute ${tierName} Neural Crucible challenge?\n\n- The minimum Deep Work duration will be locked at ${targetMin} minutes.\n- If you miss a day, your streak resets to Day 1.\n- 3 resets will trigger a Critical System Collapse.\n- This protocol CANNOT be canceled once engaged.`);
+    if (!confirmStart) return;
+    
+    state.challenge = {
+      status: 'active',
+      tier: tier,
+      currentStreak: 0,
+      totalResets: 0,
+      startDate: getCasablancaDateStr(getNow()),
+      startTs: getNow()
+    };
+    
+    showToast(`🔥 ${tierName.toUpperCase()} CRUCIBLE PROTOCOL ACTIVE. ${targetMin}-Minute Deep Work Lock engaged.`);
+    render();
+    await saveData();
+  };
+
+  window.triggerNeuralRebirth = async function() {
+    if (!currentUserAlias || isOffline) return;
+    
+    const confirmPurge = confirm(`⚠ CRITICAL SYSTEM INTERACTION ⚠\n\nThis will purge your current timeline:\n- EP will reset to 0\n- Momentum will reset to 0\n- Damage severity will reset to 0\n- Daily quota targets will reset to 1\n\nYour alias and leaderboard ranking will stay, but your system will advance to Generation ${(state.generation || 1) + 1}.\n\nAre you sure you want to proceed with NEURAL REBIRTH?`);
+    
+    if (!confirmPurge) return;
+    
+    state.baseActionEp = 0;
+    state.systemMomentum = 0;
+    state.multiplierDamage = 0;
+    state.dailyAudit = {
+      lastDate: getCasablancaDateStr(getNow()),
+      deepWorkCount: 0,
+      targetQuota: 1,
+      targetMinutes: 45,
+      successStreak: 0,
+      deepWorkMinutesToday: 0,
+      gracePeriodUntil: null,
+      absoluteStreak: 0,
+      maxAbsoluteStreak: 0
+    };
+    state.challenge = {
+      status: 'inactive',
+      currentStreak: 0,
+      totalResets: 0,
+      startDate: null
+    };
+    state.startTs = getNow();
+    state.generation = (state.generation || 1) + 1;
+    
+    if (!state.actionHistory) state.actionHistory = [];
+    state.actionHistory.unshift({
+      id: getNow(),
+      type: 'neural_rebirth',
+      ep: 0,
+      actualEp: 0,
+      multAtTime: '1.00',
+      multDmg: 0,
+      momGain: 0,
+      ts: getNow()
+    });
+    
+    showToast(`🧬 NEURAL REBIRTH: Generation ${state.generation} Initialized.`);
+    render();
+    await saveData();
+  };
+
+  // --- AUTH & ONBOARDING ---
+
+  window.login = async function() {
+    const aliasInput = document.getElementById('login-alias-input').value.trim();
+    if (!aliasInput) { showToast("Alias is required for access.", true); return; }
+    if (isOffline) { showToast("You are offline.", true); return; }
+
+    try {
+      const docRef = doc(db, DB_PATH, aliasInput);
+      const docSnap = await getDoc(docRef);
+      
+      if (docSnap.exists()) {
+        currentUserAlias = aliasInput;
+        localStorage.setItem('dtx_alias', aliasInput);
+        setupRealtimeListener();
+        initBotsIfNeeded();
+        setView('view-dashboard');
+        window.switchTab('dashboard');
+        showToast("System Breached. Welcome back.");
+      } else {
+        showToast("This Alias does not exist in our records.", true);
+      }
+    } catch (e) { console.error(e); showToast("Decryption error occurred.", true); }
+  };
+
+  window.logout = function() {
+    if (unsubscribeSnapshot) { unsubscribeSnapshot(); unsubscribeSnapshot = null; }
+    currentUserAlias = null;
+    localStorage.removeItem('dtx_alias');
+    if(intervalId) clearInterval(intervalId);
+    setView('view-auth');
+    document.getElementById('login-alias-input').value = '';
+  };
+
+  window.startOnboarding = function() {
+    setView('view-onboarding');
+    window.nextStep(1);
+    
+    let ranksHtml = '';
+    RANKS.forEach(r => {
+      ranksHtml += `
+        <div class="rank-preview-item">
+          <strong style="color: ${r.color}">${r.name}</strong>
+          <span style="color: var(--text-dim); font-family: 'Share Tech Mono', monospace;">${r.ep.toLocaleString()} EP</span>
+        </div>
+      `;
+    });
+    document.getElementById('rank-preview-container').innerHTML = ranksHtml;
+  };
+
+  window.cancelOnboarding = function() { setView('view-auth'); };
+  window.nextStep = function(step) { document.querySelectorAll('.wizard-step').forEach(s => s.classList.remove('active')); document.getElementById(`step-${step}`).classList.add('active'); };
+  window.prevStep = function(step) { window.nextStep(step); };
+
+  window.completeOnboarding = async function() {
+    const alias = document.getElementById('register-alias-input').value.trim();
+    const q1 = document.getElementById('q1-input').value.trim();
+    const q2 = document.getElementById('q2-input').value.trim();
+
+    if (!alias) { showToast("Alias is required for later access.", true); return; }
+    if (alias.length < 3) { showToast("Alias must be at least 3 characters.", true); return; }
+    if (isOffline) { showToast("Network connection required to forge identity.", true); return; }
+
+    try {
+      const docRef = doc(db, DB_PATH, alias);
+      const docSnap = await getDoc(docRef);
+      if (docSnap.exists()) {
+        showToast("Alias is already taken. Choose another.", true);
+        return;
+      }
+
+      const selectedMode = document.getElementById('mode-select-input')?.value || 'positive';
+      const showPenalties = selectedMode === 'hardcore';
+
+      const initialState = {
+        ...defaultState, alias: alias, showPenaltyButtons: showPenalties, psychProfile: { excuse: q1, pain: q2 },
+        createdAt: getNow(), startTs: getNow()
+      };
+
+      await setDoc(docRef, initialState);
+      currentUserAlias = alias;
+      localStorage.setItem('dtx_alias', alias);
+      
+      setupRealtimeListener();
+      initBotsIfNeeded();
+      setView('view-dashboard');
+      window.switchTab('dashboard');
+      showToast("System initialized. The lifelong race has started.");
+
+    } catch (e) { console.error(e); showToast("Failed to initialize system.", true); }
+  };
+
+
+  // --- MAIN RENDER LOGIC ---
+
+  function render() {
+    if (!currentUserAlias) return;
+    if (intervalId) clearInterval(intervalId);
+
+    if (!state.startTs && isLoaded) {
+        state.startTs = getNow();
+        saveData();
+    }
+
+    const statusLabel = document.getElementById('status-label');
+    const mainArea = document.getElementById('main-area');
+    const battleArea = document.getElementById('battle-area');
+    const syncStatus = document.getElementById('sync-status');
+    const btnZenToggle = document.getElementById('btn-zen-toggle');
+    const appContainer = document.getElementById('app-container');
+
+    if (isOffline) {
+      statusLabel.innerHTML = '<span class="status-dot dot-error"></span>OFFLINE';
+      syncStatus.innerText = '❌ DISCONNECTED'; syncStatus.style.color = 'var(--red)';
+    } else if (!isLoaded) {
+      statusLabel.innerHTML = '<span class="status-dot dot-idle"></span>SYNCING';
+      syncStatus.innerText = '☁️ SYNCING...'; syncStatus.style.color = 'var(--text-dim)';
+    } else {
+      syncStatus.innerText = '';
+    }
+
+    if (!isLoaded && !isOffline) {
+      mainArea.innerHTML = `<div class="timer-block"><div class="idle-title" style="margin-top: 50px;">BOOTING SYSTEM...</div></div>`;
+      battleArea.innerHTML = '';
+      btnZenToggle.style.display = 'none';
+    } else if (state.startTs) {
+      statusLabel.innerHTML = state.timeFrozen 
+        ? '<span class="status-dot" style="background:var(--blue); box-shadow:0 0 10px var(--cyan-glow);"></span>🧊 TIME FROZEN (REST MODE)'
+        : '<span class="status-dot dot-active"></span>ONLINE (LIVE)';
+        
+      btnZenToggle.style.display = 'inline-block';
+      btnZenToggle.className = state.zenMode ? 'btn-zen active' : 'btn-zen';
+
+      updateSnowfall();
+
+      if(state.zenMode) appContainer.classList.add('zen-active');
+      else appContainer.classList.remove('zen-active');
+
+      const threeDaysAgo = getNow() - (3 * 24 * 60 * 60 * 1000);
+      if (state.actionHistory) state.actionHistory = state.actionHistory.filter(a => a.ts >= threeDaysAgo);
+      else state.actionHistory = [];
+
+      document.getElementById('display-alias').innerText = `${currentUserAlias} // GEN ${state.generation || 1}`;
+
+      if (!document.getElementById('dtx-dashboard-content')) {
+        mainArea.innerHTML = `
+          <div id="dtx-dashboard-content">
+            <div class="zen-show">
+              <div class="zen-icon">👁️</div>
+              <div class="zen-text">FLOW STATE</div>
+              <div style="font-size: 14px; color: var(--text-dim); margin-top: 16px; line-height: 1.6;">System is running autonomously.<br>Execute the process. Ignore the result completely.</div>
+            </div>
+            <div class="zen-hide">
+              <div id="dyn-ep-panel"></div>
+              <div id="dyn-side-quest-panel"></div>
+              <div id="dyn-recovery-quest-panel"></div>
+              <div class="timer-block">
+                <div id="dyn-timer-grid"></div>
+                <div id="dyn-rank-container"></div>
+              </div>
+            </div>
+          </div>
+        `;
+      }
+
+      const anomalyModal = document.getElementById('anomaly-modal-overlay');
+      if (anomalyModal) {
+        if (state.sideQuest && state.sideQuest.status === 'pending_choice') {
+          anomalyModal.classList.add('active');
+          document.getElementById('anomaly-desc-text').innerText = "A dopamine receptor mismatch has caused a neural instability. To restore system equilibrium, select and commit to one of the recovery protocols below. Rewards are massive; neglect is penalized.";
+          document.getElementById('btn-defer-anomaly').style.display = 'block';
+          
+          let html = '';
+          state.sideQuest.options.forEach((opt, index) => {
+            html += `
+              <div class="stat-card" style="border-color: var(--border); background: #000; text-align: left; cursor: pointer; padding: 12px; transition: 0.2s;" onclick="window.selectAnomalyOption(${index})" id="anomaly-opt-${index}">
+                <div style="font-weight: 800; font-size: 13px; color: var(--text);">${opt.type === 'deepwork' ? '🧠 INTELLECTUAL OVERLOAD' : opt.type === 'workout' ? '🏋️ PHYSICAL OVERDRIVE' : '📱 DIGITAL BLACKOUT'}</div>
+                <div style="font-size: 11px; color: var(--text-dim); margin-top: 6px; line-height: 1.4;">${opt.label}</div>
+                <div style="font-size: 10px; color: var(--theme-primary); font-family: 'Share Tech Mono', monospace; margin-top: 8px; font-weight: bold;">
+                  REWARDS: +${opt.epReward} EP | +${opt.momReward} Mom | Heals ${opt.damageHeal} Damage
+                </div>
+              </div>
+            `;
+          });
+          document.getElementById('anomaly-options-container').innerHTML = html;
+          window.selectedAnomalyIndex = null;
+          document.getElementById('btn-accept-anomaly').disabled = true;
+          document.getElementById('btn-accept-anomaly').innerText = "ACCEPT PROTOCOL";
+        } else if (state.sideQuest && state.sideQuest.status === 'pending_mandatory') {
+          anomalyModal.classList.add('active');
+          document.getElementById('anomaly-desc-text').innerText = "The system requires immediate language calibration. Deferral is locked. Initialize the protocol to restore timeline synchronization.";
+          document.getElementById('btn-defer-anomaly').style.display = 'none';
+          
+          const opt = state.sideQuest.selectedOption;
+          document.getElementById('anomaly-options-container').innerHTML = `
+            <div class="stat-card" style="border-color: var(--theme-primary); background: rgba(245, 166, 35, 0.05); text-align: left; padding: 12px;">
+              <div style="font-weight: 800; font-size: 13px; color: var(--text);">🗣️ LINGUISTIC DECODING PROTOCOL</div>
+              <div style="font-size: 11px; color: var(--text-dim); margin-top: 6px; line-height: 1.4;">${opt.label}</div>
+              <div style="font-size: 10px; color: var(--theme-primary); font-family: 'Share Tech Mono', monospace; margin-top: 8px; font-weight: bold;">
+                REWARDS: +${opt.epReward} EP | +${opt.momReward} Mom | Heals ${opt.damageHeal} Damage
+              </div>
+            </div>
+          `;
+          window.selectedAnomalyIndex = 0;
+          document.getElementById('btn-accept-anomaly').disabled = false;
+          document.getElementById('btn-accept-anomaly').innerText = "INITIALIZE PROTOCOL";
+        } else {
+          anomalyModal.classList.remove('active');
+        }
+      }
+      
+      let currentQuota = state.dailyAudit?.deepWorkCount || 0;
+      let targetQuota = state.dailyAudit?.targetQuota || 1;
+      let targetMinutes = state.dailyAudit?.targetMinutes || 45;
+      let minutesToday = state.dailyAudit?.deepWorkMinutesToday || 0;
+      let totalReqMins = targetQuota * targetMinutes;
+
+      let isQuotaSecured = (minutesToday >= totalReqMins) || hasSingleTargetMinOnDate(state, getCasablancaDateStr(getNow()), targetMinutes) || (currentQuota >= targetQuota && minutesToday >= totalReqMins);
+      let quotaClass = isQuotaSecured ? 'quota-met' : '';
+      let quotaLabel = isQuotaSecured 
+        ? `SECURED (+${(0.25 * targetQuota).toFixed(2)} MOMENTUM TOMORROW)` 
+        : `INCOMPLETE (UP TO -${(0.3 * targetQuota).toFixed(2)} MOMENTUM IF MISSED)`;
+
+      let graceText = '';
+      const inGrace = state.dailyAudit?.gracePeriodUntil && (getNow() < state.dailyAudit.gracePeriodUntil);
+      if (inGrace) {
+        const diff = state.dailyAudit.gracePeriodUntil - getNow();
+        const hrs = Math.floor(diff / 3600000);
+        const mins = Math.floor((diff % 3600000) / 60000);
+        const secs = Math.floor((diff % 60000) / 1000);
+        graceText = `<div style="font-size: 11px; color: var(--purple); margin-top: 6px; font-weight: bold; animation: blink 1.5s infinite; font-family: 'Share Tech Mono', monospace;">⏳ TEMPORAL DILATION ACTIVE: <span id="grace-countdown">${pad(hrs)}:${pad(mins)}:${pad(secs)}</span> remaining to complete yesterday's goals!</div>`;
+      }
+
+      const dwMetrics = calculateMetrics();
+      const minDW = getMinDeepWorkDuration(dwMetrics.ep);
+
+      let challengeHtml = '';
+      if (state.challenge) {
+        if (state.challenge.status === 'active') {
+          const tier = state.challenge.tier || 'gold';
+          const targets = { bronze: 45, silver: 60, gold: 90 };
+          const durations = { bronze: 7, silver: 10, gold: 14 };
+          const rewards = {
+            bronze: { ep: 400, mom: 0.4, label: '+400 EP | +0.4 Momentum | Heals 0.2 Dmg' },
+            silver: { ep: 700, mom: 0.7, label: '+700 EP | +0.7 Momentum | Heals 0.35 Dmg' },
+            gold: { ep: 1000, mom: 1.0, label: '+1,000 EP | +1.0 Momentum | Heals 0.5 Dmg' }
+          };
+          const targetMin = targets[tier] || 90;
+          const duration = durations[tier] || 14;
+          const r = rewards[tier] || rewards.gold;
+          const tierName = tier === 'bronze' ? 'BRONZE' : (tier === 'silver' ? 'SILVER' : 'GOLD');
+
+          challengeHtml = `
+            <div class="quota-box" style="border-color: var(--red); background: rgba(226, 53, 53, 0.03); margin-bottom: 20px; text-align: left; padding: 16px;">
+              <div class="quota-text" style="color: var(--red); display: flex; justify-content: space-between; font-size: 11px; font-weight: 900; letter-spacing: 1px; font-family: 'Share Tech Mono', monospace;">
+                <span>🔥 ${tierName} CRUCIBLE ACTIVE (${targetMin}M LOCK)</span>
+                <span style="animation: blink 1.5s infinite;">${(() => {
+                  const startDayStr = state.challenge.startTs ? getCasablancaDateStr(state.challenge.startTs) : null;
+                  const startHour = state.challenge.startTs ? getCasablancaHours(state.challenge.startTs) : 0;
+                  const todayStr = getCasablancaDateStr(getNow());
+                  const pendingStart = (startDayStr === todayStr) && (startHour >= 19) && (state.challenge.currentStreak === 0);
+                  return pendingStart ? 'STARTS TOMORROW' : `DAY ${state.challenge.currentStreak}/${duration}`;
+                })()}</span>
+              </div>
+              <div style="font-size: 12px; margin-top: 8px; color: var(--text); line-height: 1.4; font-family: 'Share Tech Mono', monospace;">
+                ${(() => {
+                  const startDayStr = state.challenge.startTs ? getCasablancaDateStr(state.challenge.startTs) : null;
+                  const startHour = state.challenge.startTs ? getCasablancaHours(state.challenge.startTs) : 0;
+                  const todayStr = getCasablancaDateStr(getNow());
+                  const pendingStart = (startDayStr === todayStr) && (startHour >= 19) && (state.challenge.currentStreak === 0);
+                  return pendingStart ? `First day evaluation is deferred. Your ${duration}-day streak officially starts tomorrow.` : `Must complete a ${targetMin}-minute Deep Work session daily. Streak resets on failure.`;
+                })()}
+              </div>
+              ${(() => {
+                const startDayStr = state.challenge.startTs ? getCasablancaDateStr(state.challenge.startTs) : null;
+                const startHour = state.challenge.startTs ? getCasablancaHours(state.challenge.startTs) : 0;
+                const todayStr = getCasablancaDateStr(getNow());
+                const pendingStart = (startDayStr === todayStr) && (startHour >= 19) && (state.challenge.currentStreak === 0);
+                if (pendingStart) return '';
+                const progressMins = state.dailyAudit.deepWorkMinutesToday || 0;
+                const completed = progressMins >= targetMin;
+                return `
+                  <div style="font-size: 11px; margin-top: 8px; color: ${completed ? 'var(--green)' : 'var(--theme-primary)'}; font-family: 'Share Tech Mono', monospace; font-weight: bold; background: rgba(0,0,0,0.4); padding: 6px; border-radius: 4px; border: 1px dashed ${completed ? 'rgba(76, 175, 80, 0.3)' : 'rgba(245, 166, 35, 0.3)'};">
+                    PROGRESS TODAY: ${progressMins} / ${targetMin} MIN LOGGED ${completed ? '✅ (SECURED)' : ''}
+                  </div>
+                `;
+              })()}
+              <div style="margin-top: 10px; display: flex; justify-content: space-between; align-items: center;">
+                <div style="font-size: 10px; color: var(--text-dim); font-family: 'Share Tech Mono', monospace;">
+                  RESETS TRIGGERED: <span style="color: var(--red); font-weight: bold;">${state.challenge.totalResets}/3</span>
+                </div>
+                <div style="font-size: 10px; color: var(--theme-primary); font-family: 'Share Tech Mono', monospace; font-weight: bold;">
+                  REWARD: ${r.label}
+                </div>
+              </div>
+            </div>
+          `;
+        } else {
+          let desc = 'Lock the system into a progressive neural challenge sequence. If you fail a single day, you reset to Day 1. Resetting 3 times collapses the system. Cannot be canceled.';
+          
+          if (state.challenge.status === 'completed') {
+            desc = '🏆 CONGRATULATIONS! You successfully conquered the Neural Crucible. You can re-initialize any tier to start a new streak.';
+          } else if (state.challenge.status === 'failed') {
+            desc = '🚨 CRITICAL FAILURE! The system collapsed after 3 resets. You can re-initialize the challenge to attempt a purge and try again.';
+          }
+          
+          challengeHtml = `
+            <div class="quota-box" style="border-color: var(--theme-primary); background: rgba(245, 166, 35, 0.02); margin-bottom: 20px; text-align: left; padding: 16px;">
+              <div class="quota-text" style="color: var(--theme-primary); font-size: 11px; font-weight: 900; letter-spacing: 1px; font-family: 'Share Tech Mono', monospace;">
+                ⚡ NEURAL CRUCIBLE PROTOCOL
+              </div>
+              <div style="font-size: 11px; margin-top: 6px; color: var(--text-dim); line-height: 1.4;">
+                ${desc}
+              </div>
+              <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; margin-top: 12px;">
+                <button class="btn" style="background: transparent; border: 1px solid var(--theme-primary); color: var(--theme-primary); padding: 8px; font-size: 10px; font-weight: 800;" onclick="window.startChallenge('bronze')">
+                  BRONZE (7d / 45m)
+                </button>
+                <button class="btn" style="background: transparent; border: 1px solid var(--theme-primary); color: var(--theme-primary); padding: 8px; font-size: 10px; font-weight: 800;" onclick="window.startChallenge('silver')">
+                  SILVER (10d / 60m)
+                </button>
+                <button class="btn" style="background: transparent; border: 1px solid var(--theme-primary); color: var(--theme-primary); padding: 8px; font-size: 10px; font-weight: 800;" onclick="window.startChallenge('gold')">
+                  GOLD (14d / 90m)
+                </button>
+              </div>
+            </div>
+          `;
+        }
+      }
+
+      battleArea.innerHTML = `
+        <div>
+          <!-- NEW: THE THRESHOLD PROTOCOL -->
+          <div class="section-title" style="color: var(--purple); border-bottom-color: rgba(156, 39, 176, 0.3);">THE THRESHOLD (Initiation Protocol)</div>
+          <div style="font-size: 11px; color: var(--text-dim); margin-bottom: 12px; line-height: 1.5;">
+            "The pain is in the start. Apply the 1-Minute Rule. No thinking, just initiate."<br>
+            <strong style="color:var(--purple);">Target:</strong> 2-3 times daily. Reach 100+ starts to permanently crush the resistance barrier. Once broken, you will never want to go back.
+          </div>
+          <div class="actions-grid" style="margin-bottom: 24px;">
+            <button class="btn-action btn-purple" style="grid-column: span 2;" onclick="window.logAction('start_friction')">
+              <span class="action-icon">🚀</span><span>Initiate (Break Friction)</span>
+              <span class="action-ep" style="color:var(--purple);">+30 EP (x Growth)</span>
+              <span class="heal-text" style="color:var(--text);">Momentum +0.05 | <span style="color:var(--purple); font-weight:900;">+1 Total Starts</span></span>
+            </button>
+          </div>
+
+          <div class="section-title" style="color: var(--blue); border-bottom-color: rgba(0,255,255,0.3);">MENTAL BATTLES (Micro-Wins)</div>
+          <div class="actions-grid">
+            <button class="btn-action btn-mental" onclick="window.logAction('thought_kill')">
+              <span class="action-icon">🧠</span><span>Kill Toxic Thought</span>
+              <span class="action-ep">+10 EP (x Growth)</span>
+            </button>
+            <button class="btn-action btn-mental" onclick="window.logAction('trigger_escape')">
+              <span class="action-icon">🏃</span><span>Tactical Escape</span>
+              <span class="action-ep">+25 EP (x Growth)</span>
+            </button>
+            <button class="btn-action btn-mental" onclick="window.logAction('urge_survive')" style="grid-column: span 2;">
+              <span class="action-icon">🛡️</span><span>Survive Massive Urge</span>
+              <span class="action-ep">+50 EP (x Growth)</span>
+              <span class="heal-text">Heals 0.05 Damage Severity</span>
+            </button>
+          </div>
+        </div>
+
+        ${challengeHtml}
+
+        <div class="section-title">SYSTEM INPUTS (Mastery & Biology)</div>
+        <div class="quota-box ${state.timeFrozen ? 'quota-met' : (inGrace ? '' : quotaClass)}" style="${state.timeFrozen ? 'border-color: var(--blue); background: rgba(0, 255, 255, 0.03);' : (inGrace ? 'border-color: var(--purple); background: rgba(156, 39, 176, 0.02);' : '')}">
+            <div class="quota-text">${state.timeFrozen ? '🧊 SYSTEM STATUS: TIME FROZEN (VACATION MODE)' : `DAILY DEEP WORK GOAL: ${currentQuota}/${targetQuota} Sessions (${targetMinutes}m Target) ${isQuotaSecured ? '(SECURED)' : ''}`}</div>
+            <div style="font-size: 10px; color: var(--text-dim); margin-top: 6px;">STATUS: ${state.timeFrozen ? 'PAUSED: NO PENALTIES OR STREAK RESETS DURING VACATION' : (inGrace ? 'TEMPORAL EXTENSION ACTIVE' : quotaLabel)}</div>
+            ${graceText}
+            <button class="btn" style="background: transparent; color: var(--theme-primary); border: 1px solid var(--theme-primary); padding: 8px 14px; font-size: 11px; margin-top: 10px; font-weight: 800; pointer-events: auto; cursor: pointer;" onclick="window.customizeDailyGoals()">
+                ⚙️ CUSTOMIZE DAILY GOAL (تعديل الأهداف)
+            </button>
+            <button class="btn" style="background: transparent; color: ${state.showPenaltyButtons ? 'var(--red)' : 'var(--green)'}; border: 1px solid ${state.showPenaltyButtons ? 'var(--red)' : 'var(--green)'}; padding: 8px 14px; font-size: 11px; margin-top: 10px; margin-left: 6px; font-weight: 800; pointer-events: auto; cursor: pointer;" onclick="window.togglePenaltyButtons()">
+                ${state.showPenaltyButtons ? '⚔️ SELF-PUNISHMENT: ENABLED' : '🛡️ POSITIVE FOCUS: ACTIVE (NO PENALTY BUTTONS)'}
+            </button>
+            <button class="btn" style="background: transparent; color: ${state.allowSuddenAnomalies ? 'var(--blue)' : 'var(--text-dim)'}; border: 1px solid ${state.allowSuddenAnomalies ? 'var(--blue)' : 'var(--border)'}; padding: 8px 14px; font-size: 11px; margin-top: 10px; margin-left: 6px; font-weight: 800; pointer-events: auto; cursor: pointer;" onclick="window.toggleSuddenAnomalies()">
+                ${state.allowSuddenAnomalies ? '⚡ SUDDEN ANOMALIES: ENABLED' : '🛡️ SUDDEN ANOMALIES: DISABLED (OFF)'}
+            </button>
+            <button class="btn" style="background: ${state.timeFrozen ? 'var(--blue)' : 'transparent'}; color: ${state.timeFrozen ? '#000' : 'var(--blue)'}; border: 1px solid var(--blue); padding: 8px 14px; font-size: 11px; margin-top: 10px; margin-left: 6px; font-weight: 800; pointer-events: auto; cursor: pointer;" onclick="window.toggleTimeFreeze()">
+                ${state.timeFrozen ? '🧊 UNFREEZE TIME (RESUME SYSTEM)' : '🧊 FREEZE TIME (VACATION MODE)'}
+            </button>
+        </div>
+
+        <div>
+          <div class="actions-grid">
+            <button class="btn-action" onclick="window.logAction('deepwork')">
+              <span class="action-icon">⚡</span><span>Deep Work (Min: ${minDW}m)</span>
+              <span class="action-ep">+${Math.floor(minDW * 0.6)} EP (x Growth)</span>
+              <span class="heal-text">Heals ${(minDW * 0.10 / 90).toFixed(2)} Damage Severity</span>
+            </button>
+            <button class="btn-action" onclick="window.logAction('bio')">
+              <span class="action-icon">🌙</span><span>Bio-Discipline</span>
+              <span class="action-ep">+40 EP (x Growth)</span>
+            </button>
+          </div>
+
+          <div class="section-title" style="color: #F5A623; border-bottom-color: rgba(245, 166, 35, 0.3);">THE FORGE (Pain & Fear)</div>
+          <div class="actions-grid">
+            <button class="btn-action" style="border-color: rgba(245, 166, 35, 0.3);" onclick="window.logAction('workout')">
+              <span class="action-icon">🏋️</span><span>Physical Forge</span>
+              <span class="action-ep" style="color:#F5A623;">+40 EP (x Growth)</span>
+              <span class="heal-text">Momentum +0.10</span>
+            </button>
+            <button class="btn-action" style="border-color: rgba(245, 166, 35, 0.3);" onclick="window.logAction('courage')">
+              <span class="action-icon">🔥</span><span>Embrace Discomfort</span>
+              <span class="action-ep" style="color:#F5A623;">+60 EP (x Growth)</span>
+              <span class="heal-text">Massive Momentum +0.15</span>
+            </button>
+          </div>
+
+          ${state.showPenaltyButtons ? `
+            <div class="section-title" style="color: var(--red); border-bottom-color: rgba(226,53,53,0.3);">SYSTEM FAILURES (The Fall)</div>
+            <div class="actions-grid">
+              <button class="btn-action btn-penalty" onclick="window.logPenalty('waste')">
+                <span class="action-icon">📱</span><span>Cheap Dopamine</span>
+                <span class="action-ep">-50 EP (x Decay) | +0.3 Dmg</span>
+              </button>
+              <button class="btn-action btn-penalty" onclick="window.logPenalty('biodisrespect')">
+                <span class="action-icon">🍔</span><span>Bio Destruction</span>
+                <span class="action-ep">-30 EP (x Decay) | +0.15 Dmg</span>
+              </button>
+              <button class="btn-action btn-penalty" onclick="window.logPenalty('binge')" style="grid-column: span 2; border-color: var(--red); background: rgba(226,53,53,0.05);">
+                <span class="action-icon">☠️</span><span>Catastrophic Binge</span>
+                <span class="action-ep">-150 EP (x Decay) | +0.8 Dmg</span>
+                <span style="font-size: 10px; color: var(--red); margin-top: 4px; font-weight: bold;">Wipes Momentum Entirely</span>
+              </button>
+            </div>
+          ` : ''}
+
+          <div class="section-title" style="color: #00FFFF; border-bottom-color: rgba(0,255,255,0.3);">DAILY DIRECTIVE (The Contract)</div>
+          <div id="quest-container"></div>
+        </div>
+
+        <div class="section-title" style="margin-top:30px;">LIVE EXECUTION LOG</div>
+        <div id="action-log-container"></div>
+      `;
+
+      const questBox = document.getElementById('quest-container');
+      if (questBox) {
+        if (!state.quest || state.quest.status === 'none') {
+          questBox.innerHTML = `
+            <div class="contract-box">
+              <input type="text" id="quest-input" class="contract-input" placeholder="Set absolute priority for today...">
+              <button class="btn btn-outline" onclick="window.signContract()" style="padding: 12px; font-size: 13px; margin-top:8px; border-color: var(--blue); color: var(--blue);">LOCK IN DIRECTIVE</button>
+            </div>
+          `;
+        } else {
+          questBox.innerHTML = `
+            <div class="contract-box" style="border-color: #00FFFF; box-shadow: inset 0 0 15px rgba(0,255,255,0.1);">
+              <div style="font-size:12px; color:#00FFFF; margin-bottom:10px; font-weight:bold; letter-spacing:1px; font-family:'Share Tech Mono', monospace;">ACTIVE DIRECTIVE</div>
+              <div class="contract-active-text">"${state.quest.text}"</div>
+              <div style="display:flex; gap:12px;">
+                <button class="btn" style="background:#4CAF50; color:#fff; padding:12px; font-size:12px;" onclick="window.resolveContract('pass')">EXECUTED (+100 EP)</button>
+                <button class="btn" style="background:transparent; border:1px solid var(--red); color:var(--red); padding:12px; font-size:12px;" onclick="window.resolveContract('fail')">FAILED (-100 EP)</button>
+              </div>
+            </div>
+          `;
+        }
+      }
+
+      let actionLogHtml = '<div style="text-align:center; font-size:13px; color:var(--text-dim); padding: 20px;">Awaiting inputs...</div>';
+      if (state.actionHistory && state.actionHistory.length > 0) {
+        actionLogHtml = `<div class="action-log-list">` + state.actionHistory.map(a => {
+          let title = '';
+          let epClass = a.actualEp >= 0 ? 'pos' : 'neg';
+          let sign = a.actualEp >= 0 ? '+' : '';
+          
+          if(a.type === 'start_friction') { title = '🚀 Initiation (Friction Broken)'; epClass = 'purple'; }
+          else if(a.type === 'thought_kill') title = '🧠 Toxic Thought Killed';
+          else if(a.type === 'trigger_escape') title = '🏃 Tactical Escape Success';
+          else if(a.type === 'urge_survive') title = '🛡️ Legendary Trap Survival';
+          else if(a.type === 'deepwork') {
+            const dur = a.duration || 90;
+            title = `⚡ Deep Work Session (${dur}m)`;
+          }
+          else if(a.type === 'bio') title = '🌙 Bio-Discipline Respected';
+          else if(a.type === 'workout') title = '🏋️ Physical Forge';
+          else if(a.type === 'courage') title = '🔥 Comfort Zone Destroyed';
+          else if(a.type === 'waste') title = '📱 Dopamine Numbness';
+          else if(a.type === 'biodisrespect') title = '🍔 Bio Destruction';
+          else if(a.type === 'binge') title = '☠️ Catastrophic Binge';
+          else if(a.type === 'contract_pass') title = '✅ Directive Executed';
+          else if(a.type === 'contract_fail') title = '❌ Directive Failed';
+          else if(a.type === 'daily_success') { title = '🌟 Daily Quota Conquered'; epClass = 'gold'; }
+          else if(a.type === 'atrophy') title = '📉 System Atrophy (Quota Missed)';
+          else if(a.type === 'neural_rebirth') { title = '🧬 Neural Rebirth (New Gen Loaded)'; epClass = 'gold'; }
+          else if(a.type === 'side_quest_accepted') {
+            const name = a.questType === 'deepwork' ? 'Deep Work' : a.questType === 'workout' ? 'Workout' : a.questType === 'linguistic' ? 'Linguistic Decoding' : 'Blackout';
+            title = `📂 Anomaly Accepted: ${name}`;
+          }
+          else if(a.type === 'side_quest_success') {
+            const name = a.questType === 'deepwork' ? 'Deep Work' : a.questType === 'workout' ? 'Workout' : a.questType === 'linguistic' ? 'Linguistic Decoding' : 'Blackout';
+            title = `⚡ Anomaly Solved: ${name}`; epClass = 'gold';
+          }
+          else if(a.type === 'side_quest_failed') {
+            const name = a.questType === 'deepwork' ? 'Deep Work' : a.questType === 'workout' ? 'Workout' : a.questType === 'linguistic' ? 'Linguistic Decoding' : 'Blackout';
+            title = `⚠ Anomaly Failed: ${name}`; epClass = 'neg';
+          }
+          else if(a.type === 'shop_purchase') { title = `🛒 Shop Purchased: ${a.itemId === 'shield' ? 'System Shield' : a.itemId === 'catalyst' ? 'Catalyst Boost' : a.itemId === 'time_extender' ? 'Temporal Dilator' : a.itemId === 'repair' ? 'Nanite Repair' : 'Temporal Pardon'}`; epClass = 'neg'; }
+          else if(a.type === 'shield_consume') { title = '🛡️ Shield Consumed (Quota Protected)'; epClass = 'pos'; }
+          else if(a.type === 'time_extender_consume') { title = '⏳ Temporal Dilator Consumed (Deadline Extended)'; epClass = 'pos'; }
+          else if(a.type === 'challenge_completed') { title = '🏆 Neural Crucible Challenge Conquered'; epClass = 'gold'; }
+          else if(a.type === 'challenge_failed') { title = '🚨 Neural Crucible Challenge Failed'; epClass = 'neg'; }
+          else if(a.type === 'recovery_success') { title = `🚨 Emergency Recovery: ${a.questLabel || 'Completed'}`; epClass = 'pos'; }
+
+          let subText = a.type === 'recovery_success' ? 'Emergency stabilization patch applied.' : `(Base: ${a.ep}, Mult applied: x${a.multAtTime})`;
+
+          return `
+          <div class="action-log-item">
+            <div class="log-info">
+              <div class="log-title">${title} <span class="log-ep ${epClass}">${a.actualEp !== 0 ? `(${sign}${a.actualEp} EP)` : ''}</span></div>
+              <div style="font-size: 10px; color: var(--text-muted); font-family: 'Share Tech Mono', monospace; margin-top:2px;">${subText}</div>
+              <div class="log-time">${formatActionTime(a.ts)}</div>
+            </div>
+            ${(a.type !== 'contract_pass' && a.type !== 'contract_fail' && a.type !== 'atrophy' && a.type !== 'daily_success' && a.type !== 'neural_rebirth' && a.type !== 'side_quest_accepted' && a.type !== 'side_quest_success' && a.type !== 'side_quest_failed' && a.type !== 'shop_purchase' && a.type !== 'challenge_completed' && a.type !== 'challenge_failed' && a.type !== 'recovery_success') ? `<button class="btn-undo-mini" onclick="window.undoSpecificAction(${a.id})">UNDO</button>` : ''}
+          </div>
+        `}).join('') + `</div>`;
+      }
+      document.getElementById('action-log-container').innerHTML = actionLogHtml;
+
+      const dynEpPanel = document.getElementById('dyn-ep-panel');
+      const dynTimerGrid = document.getElementById('dyn-timer-grid');
+      const dynRankContainer = document.getElementById('dyn-rank-container');
+
+      function updateTimerOnly() {
+        if(!state.startTs) return;
+
+        const clockEl = document.getElementById('system-clock-display');
+        if (clockEl) {
+          const sysTimeStr = new Intl.DateTimeFormat('en-US', {
+            timeZone: 'Africa/Casablanca',
+            hour: '2-digit',
+            minute: '2-digit',
+            second: '2-digit',
+            hour12: false
+          }).format(new Date(getNow()));
+          clockEl.innerText = `SYS: ${sysTimeStr} (Casablanca)`;
+        }
+        
+        const graceCountdownEl = document.getElementById('grace-countdown');
+        if (graceCountdownEl && state.dailyAudit?.gracePeriodUntil) {
+          const diff = state.dailyAudit.gracePeriodUntil - getNow();
+          if (diff > 0) {
+            const hrs = Math.floor(diff / 3600000);
+            const mins = Math.floor((diff % 3600000) / 60000);
+            const secs = Math.floor((diff % 60000) / 1000);
+            graceCountdownEl.innerText = `${pad(hrs)}:${pad(mins)}:${pad(secs)}`;
+          } else {
+            runDailyAudit();
+          }
+        }
+
+        runDailyAudit(); 
+
+        const metrics = calculateMetrics();
+        const rank = getCurrentRank(metrics.ep);
+        const sysMode = getSystemMode(metrics.ep);
+        
+        applyTheme(rank);
+        
+        if (dynEpPanel) {
+          let tierColor = 'var(--theme-primary)';
+          if (sysMode.name === 'RECOVERY') tierColor = 'var(--blue)';
+          if (sysMode.name === 'MACHINE') tierColor = 'var(--red)';
+
+          const isBoostActive = state.inventory?.boostActive && state.inventory?.boostUntil && state.inventory.boostUntil > getNow();
+          dynEpPanel.innerHTML = `
+            <div class="ep-panel">
+              <div class="sys-label" style="margin-bottom:8px; color: ${tierColor}; font-weight:900;">SYSTEM MODE // ${sysMode.name}</div>
+              <div style="font-size: 10px; color: var(--text-dim); margin-bottom: 12px; font-family:'Share Tech Mono', monospace;">${sysMode.desc}</div>
+              
+              <div class="ep-label">LIFETIME SYSTEM POINTS (EP)</div>
+              <div class="ep-score" style="${metrics.ep < 0 ? 'color: var(--red); text-shadow: 0 0 25px rgba(226,53,53,0.6);' : ''}">${metrics.ep.toLocaleString()}</div>
+              
+              <div class="mult-container">
+                <div class="mult-box">
+                    <div class="mult-lbl">GROWTH MULTIPLIER</div>
+                    <div class="mult-val mult-pos">x${(parseFloat(metrics.positiveMult) * sysMode.rewardScale).toFixed(2)}</div>
+                    <div style="font-size: 10px; color: var(--text-dim); margin-top:4px;">MOMENTUM: ${metrics.momentum.toFixed(2)}</div>
+                </div>
+                <div class="mult-box">
+                    <div class="mult-lbl" style="color:var(--red);">DECAY MULT (HELL)</div>
+                    <div class="mult-val mult-neg">x${(parseFloat(metrics.negativeMult) * sysMode.penaltyScale).toFixed(2)}</div>
+                    <div style="font-size: 10px; color: var(--text-dim); margin-top:4px;">SYS_DMG: ${metrics.rawDamage.toFixed(2)}</div>
+                </div>
+              </div>
+              
+              ${(state.inventory?.shields > 0 || isBoostActive) ? `
+                <div style="margin-top: 14px; padding-top: 10px; border-top: 1px dashed var(--border); display: flex; justify-content: center; gap: 16px; font-size: 10px; font-family:'Share Tech Mono', monospace;">
+                  ${state.inventory?.shields > 0 ? `<span style="color: var(--blue);">🛡️ SHIELDS: ${state.inventory.shields}</span>` : ''}
+                  ${isBoostActive ? `<span style="color: var(--theme-primary);">⚡ CATALYST ACTIVE</span>` : ''}
+                </div>
+              ` : ''}
+              
+              ${metrics.rawDamage > metrics.momentum ? `<div class="sys-dmg-alert">⚠ DECAY EXCEEDS MOMENTUM. SYSTEM COLLAPSING.</div>` : ''}
+              ${metrics.momentum > 2.0 && metrics.rawDamage === 0 ? `<div class="sys-dmg-alert" style="color:var(--blue); animation: none;">[ FLOW STATE LOCKED. MOMENTUM HIGH. ]</div>` : ''}
+            </div>
+          `;
+        }
+
+        if (dynTimerGrid) {
+          dynTimerGrid.innerHTML = `
+            <div class="timer-grid">
+              <div class="unit"><span class="unit-val">${pad(metrics.days)}</span><span class="unit-label">DAYS</span></div><span class="sep">:</span>
+              <div class="unit"><span class="unit-val">${pad(metrics.hours)}</span><span class="unit-label">HRS</span></div><span class="sep">:</span>
+              <div class="unit"><span class="unit-val">${pad(metrics.mins)}</span><span class="unit-label">MIN</span></div><span class="sep">:</span>
+              <div class="unit"><span class="unit-val">${pad(metrics.secs)}</span><span class="unit-label">SEC</span></div>
+            </div>
+          `;
+        }
+
+        if (dynRankContainer) {
+          dynRankContainer.innerHTML = `
+            <div class="rank-container">
+              <div class="rank-prob">Mutation Probability: ${rank.prob}</div>
+              <div class="rank-name" style="${metrics.ep < 0 ? 'color: var(--red); text-shadow: 0 0 15px rgba(226,53,53,0.5);' : ''}">${rank.name}</div>
+              <div class="rank-desc">${rank.desc}</div>
+              <div class="progress-wrapper">
+                <div class="progress-bar" style="width: ${rank.progress}%; background-color: ${metrics.ep < 0 ? 'var(--red)' : ''}; box-shadow: ${metrics.ep < 0 ? '0 0 15px var(--red)' : ''};"></div>
+              </div>
+              <span style="font-size: 11px; color: var(--text-muted); margin-top: 10px; display: block; font-family: 'Share Tech Mono', monospace; letter-spacing: 1px;">NEXT STAGE: ${rank.nextEp === undefined ? '---' : rank.nextEp.toLocaleString()} EP</span>
+            </div>
+          `;
+        }
+
+        if(document.getElementById('stat-current-ep')){
+          document.getElementById('stat-starts').innerText = state.stats?.startsCount || 0;
+          document.getElementById('stat-battles').innerText = state.stats?.battlesWon || 0;
+          document.getElementById('stat-current-ep').innerText = metrics.ep.toLocaleString();
+          if (metrics.ep < 0) document.getElementById('stat-current-ep').style.color = 'var(--red)';
+          else document.getElementById('stat-current-ep').style.color = 'var(--theme-primary)';
+          document.getElementById('stat-current-days').innerText = pad(metrics.days);
+          document.getElementById('stat-best-ep').innerText = Math.max(state.bestEp || 0, metrics.ep).toLocaleString();
+          document.getElementById('stat-best-days').innerText = Math.max(state.bestStreakDays || 0, metrics.days);
+          document.getElementById('stat-deepwork').innerText = state.stats?.deepWork || 0;
+          document.getElementById('stat-bio').innerText = state.stats?.bioOptimized || 0;
+          document.getElementById('stat-abs-streak').innerText = pad(state.dailyAudit?.absoluteStreak || 0);
+          document.getElementById('stat-max-abs-streak').innerText = pad(state.dailyAudit?.maxAbsoluteStreak || 0);
+        }
+
+        if (document.getElementById('shop-inventory-display')) {
+          const shields = state.inventory?.shields || 0;
+          const timeExtenders = state.inventory?.timeExtenders || 0;
+          const boostUntil = state.inventory?.boostUntil || 0;
+          let catalystText = "None";
+          if (state.inventory?.boostActive && boostUntil > getNow()) {
+            const diff = boostUntil - getNow();
+            const hrs = Math.floor(diff / 3600000);
+            const mins = Math.floor((diff % 3600000) / 60000);
+            const secs = Math.floor((diff % 60000) / 1000);
+            catalystText = `${pad(hrs)}:${pad(mins)}:${pad(secs)}`;
+          }
+          const lastPardon = state.dailyAudit?.lastPardonDate || "None";
+          let pardonCooldownText = "Ready";
+          if (lastPardon !== "None") {
+            const lastPardonObj = parseDateStr(lastPardon);
+            const todayObj = parseDateStr(getCasablancaDateStr(getNow()));
+            const daysSincePardon = Math.round((todayObj - lastPardonObj) / 86400000);
+            if (daysSincePardon < 7) {
+              pardonCooldownText = `${7 - daysSincePardon}d Cooldown`;
+            }
+          }
+          document.getElementById('shop-inventory-display').innerText = `Shields Stocked: ${shields} | Dilators Stocked: ${timeExtenders} | Catalyst Active: ${catalystText} | Pardon: ${pardonCooldownText}`;
+        }
+
+        const sqPanel = document.getElementById('dyn-side-quest-panel');
+        if (sqPanel) {
+          if (state.sideQuest && state.sideQuest.status === 'active') {
+            const opt = state.sideQuest.selectedOption;
+            let actionBtnHtml = '';
+            let checklistHtml = '';
+            if (opt.type === 'blackout') {
+              actionBtnHtml = `<button class="btn" style="padding: 8px; font-size: 11px; background: var(--theme-primary); color: #000; margin-top: 10px;" onclick="window.declareManualQuestComplete()">DECLARE COMPLETED</button>`;
+            } else if (opt.type === 'linguistic') {
+              const steps = state.sideQuest.linguisticSteps || [false, false, false, false];
+              const labels = [
+                "Choose a foreign song or dialogue/speech (English/French)",
+                "Understand its full meaning & translation",
+                "Practice pronunciation & record yourself",
+                "Export vocabulary to Anki & review"
+              ];
+              checklistHtml = `
+                <div class="linguistic-checklist" style="margin-top: 12px; display: flex; flex-direction: column; gap: 8px; border-top: 1px dashed var(--border); padding-top: 10px;">
+                  ${labels.map((lbl, idx) => `
+                    <label style="display: flex; align-items: center; gap: 8px; font-size: 11px; cursor: pointer; color: ${steps[idx] ? 'var(--theme-primary)' : 'var(--text-dim)'};">
+                      <input type="checkbox" ${steps[idx] ? 'checked' : ''} onchange="window.toggleLinguisticStep(${idx})" style="accent-color: var(--theme-primary); cursor: pointer;">
+                      <span style="${steps[idx] ? 'text-decoration: line-through;' : ''}">${lbl}</span>
+                    </label>
+                  `).join('')}
+                </div>
+              `;
+              const allChecked = steps.every(Boolean);
+              actionBtnHtml = `<button class="btn" style="padding: 8px; font-size: 11px; background: ${allChecked ? 'var(--theme-primary)' : 'var(--border)'}; color: ${allChecked ? '#000' : 'var(--text-muted)'}; margin-top: 10px;" onclick="window.declareManualQuestComplete()" ${allChecked ? '' : 'disabled'}>DECLARE COMPLETED</button>`;
+            }
+            sqPanel.innerHTML = `
+              <div class="quota-box" style="border-color: var(--theme-primary); background: rgba(245, 166, 35, 0.03); margin-bottom: 24px; text-align: left; padding: 16px;">
+                <div class="quota-text" style="color: var(--theme-primary); display: flex; justify-content: space-between; font-size: 11px;">
+                  <span>⚠️ ACTIVE PROTOCOL ANOMALY</span>
+                  <span style="animation: blink 2s infinite;">IN PROGRESS</span>
+                </div>
+                <div style="font-size: 12px; margin-top: 8px; color: var(--text); line-height: 1.4;">${opt.label}</div>
+                ${checklistHtml}
+                <div style="font-size: 10px; color: var(--text-dim); margin-top: 12px; font-family:'Share Tech Mono', monospace;">
+                  REWARDS: +${opt.epReward} EP | +${opt.momReward} Mom | Heals ${opt.damageHeal} Damage
+                </div>
+                ${actionBtnHtml}
+              </div>
+            `;
+          } else {
+            sqPanel.innerHTML = '';
+          }
+        }
+
+        const rqPanel = document.getElementById('dyn-recovery-quest-panel');
+        if (rqPanel) {
+          const metrics = calculateMetrics();
+          const inDanger = (metrics.ep < 0) || (metrics.rawDamage >= 0.5);
+          const todayStr = getCasablancaDateStr(getNow());
+          
+          if (!state.recoveryQuest) state.recoveryQuest = { status: 'none', date: null, activeQuest: null };
+          
+          if (state.recoveryQuest.date && state.recoveryQuest.date !== todayStr) {
+            state.recoveryQuest.status = 'none';
+            state.recoveryQuest.activeQuest = null;
+          }
+
+          if (inDanger) {
+            if (state.recoveryQuest.status === 'none') {
+              rqPanel.innerHTML = `
+                <div class="quota-box" style="border-color: var(--red); background: rgba(226, 53, 53, 0.04); margin-bottom: 24px; text-align: left; padding: 16px;">
+                  <div class="quota-text" style="color: var(--red); font-size: 11px; font-weight: 900; letter-spacing: 1px; font-family: 'Share Tech Mono', monospace;">
+                    🚨 EMERGENCY RECOVERY PROTOCOL (SYSTEM DANGER MODE)
+                  </div>
+                  <div style="font-size: 11px; margin-top: 8px; color: var(--text); line-height: 1.4;">
+                    Your system is in severe decay (Negative EP or 0.5+ Damage). Select one of these recovery protocols to stabilize the grid:
+                  </div>
+                  <div style="margin-top: 12px; display: flex; flex-direction: column; gap: 8px;">
+                    <button class="btn btn-outline" style="padding: 10px; font-size: 11px; border-color: var(--red); color: var(--red); text-align: left;" onclick="window.activateRecovery(1)">
+                      ⚡ <strong>Focus Injection (15m):</strong> Log 15m+ Deep Work session (+200 EP, -0.15 Damage)
+                    </button>
+                    <button class="btn btn-outline" style="padding: 10px; font-size: 11px; border-color: var(--red); color: var(--red); text-align: left;" onclick="window.activateRecovery(2)">
+                      🏋️ <strong>Physical Anchor (10m):</strong> Do 10m physical movement (+200 EP, -0.15 Damage)
+                    </button>
+                    <button class="btn btn-outline" style="padding: 10px; font-size: 11px; border-color: var(--red); color: var(--red); text-align: left;" onclick="window.activateRecovery(3)">
+                      🧘 <strong>Stimulus Shield (10m):</strong> Sit in 10m absolute silence/mind reset (+200 EP, -0.15 Damage)
+                    </button>
+                  </div>
+                </div>
+              `;
+            } else if (state.recoveryQuest.status === 'active') {
+              const q = state.recoveryQuest.activeQuest;
+              let actionBtnHtml = '';
+              if (q.type === 'deepwork') {
+                actionBtnHtml = `<div style="font-size: 11px; color: var(--text-dim); font-style: italic; margin-top: 10px;">Log a Deep Work session of 15m+ using the Console tab.</div>`;
+              } else {
+                actionBtnHtml = `<button class="btn" style="padding: 8px; font-size: 11px; background: var(--red); color: #000; font-weight: 800; margin-top: 10px;" onclick="window.completeRecovery()">DECLARE COMPLETED</button>`;
+              }
+              rqPanel.innerHTML = `
+                <div class="quota-box" style="border-color: var(--red); background: rgba(226, 53, 53, 0.05); margin-bottom: 24px; text-align: left; padding: 16px; box-shadow: 0 0 15px rgba(226,53,53,0.15);">
+                  <div class="quota-text" style="color: var(--red); font-size: 11px; font-weight: 900; display: flex; justify-content: space-between;">
+                    <span>⚠️ EMERGENCY RECOVERY ACTIVE</span>
+                    <span style="animation: blink 1.5s infinite;">STABILIZING GRID</span>
+                  </div>
+                  <div style="font-size: 12px; margin-top: 8px; color: var(--text); font-weight: bold;">${q.label}</div>
+                  <div style="font-size: 10px; color: var(--text-dim); margin-top: 6px;">REWARDS: +200 EP | Heals 0.15 Damage Severity</div>
+                  ${actionBtnHtml}
+                </div>
+              `;
+            } else if (state.recoveryQuest.status === 'completed') {
+              rqPanel.innerHTML = `
+                <div class="quota-box" style="border-color: var(--green); background: rgba(76, 175, 80, 0.03); margin-bottom: 24px; text-align: left; padding: 16px;">
+                  <div class="quota-text" style="color: var(--green); font-size: 11px; font-weight: 900;">
+                    ✅ EMERGENCY PROTOCOL CONCLUDED
+                  </div>
+                  <div style="font-size: 11px; margin-top: 6px; color: var(--text-dim);">
+                    The recovery protocol has stabilized the system for today. Continue the process.
+                  </div>
+                </div>
+              `;
+            }
+          } else {
+            rqPanel.innerHTML = '';
+          }
+        }
+      }
+
+      updateTimerOnly();
+      intervalId = setInterval(updateTimerOnly, 1000);
+    }
+  }
+
+  // --- ACTIONS & DATA MANAGEMENT ---
+
+  async function saveData() {
+    if (!currentUserAlias || isOffline) return;
+    try {
+      const docRef = doc(db, DB_PATH, currentUserAlias);
+      await setDoc(docRef, state, {merge: true});
+    } catch (error) {
+      console.error("Error saving:", error);
+      showToast("Failed to save data", true);
+    }
+  }
+
+  window.logAction = async function(type) {
+    if (!state.startTs) return;
+    if (!state.stats) state.stats = { resisted: 0, deepWork: 0, bioOptimized: 0, battlesWon: 0, startsCount: 0 };
+    if (!state.actionHistory) state.actionHistory = [];
+
+    let addedEp = 0;
+    let healedMult = 0;
+    let momentumGain = 0;
+    let customDuration = null;
+
+    let sideQuestSuccess = false;
+    let sideQuestRewardEp = 0;
+    let sideQuestMomGain = 0;
+    let sideQuestHeal = 0;
+    let questType = '';
+
+    if (type === 'start_friction') {
+      addedEp = 30; momentumGain = 0.05;
+      state.stats.startsCount = (state.stats.startsCount || 0) + 1;
+      showToast("Threshold broken. The hardest part is over.");
+    }
+    else if (type === 'thought_kill') { addedEp = 10; momentumGain = 0.02; state.stats.battlesWon = (state.stats.battlesWon || 0) + 1; showToast("Thought assassinated. Tactical win."); } 
+    else if (type === 'trigger_escape') { addedEp = 25; momentumGain = 0.05; state.stats.battlesWon = (state.stats.battlesWon || 0) + 1; showToast("Tactical escape successful. System protected."); } 
+    else if (type === 'urge_survive') {
+      addedEp = 50; momentumGain = 0.10; state.stats.battlesWon = (state.stats.battlesWon || 0) + 1;
+      healedMult = 0.05;
+      showToast("Legendary resistance. Momentum surging.");
+    } else if (type === 'deepwork') {
+      const currentMetrics = calculateMetrics();
+      const minDuration = getMinDeepWorkDuration(currentMetrics.ep);
+      const userInput = prompt(`Enter Deep Work duration in minutes (Minimum required: ${minDuration}m):`, minDuration);
+      
+      if (userInput === null) {
+        return; 
+      }
+      
+      const parsedDuration = parseInt(userInput, 10);
+      if (isNaN(parsedDuration) || parsedDuration < minDuration) {
+        showToast(`Invalid duration. Must be a number and at least ${minDuration} minutes.`, true);
+        return;
+      }
+      
+      customDuration = parsedDuration;
+      addedEp = Math.floor(customDuration * 0.6);
+      momentumGain = customDuration * (0.15 / 90);
+      healedMult = customDuration * (0.10 / 90);
+
+      state.stats.deepWork++;
+      
+      if (!state.dailyAudit) state.dailyAudit = { lastDate: getCasablancaDateStr(getNow()), deepWorkCount: 0, targetQuota: 1, successStreak: 0, deepWorkMinutesToday: 0, gracePeriodUntil: null };
+      state.dailyAudit.deepWorkCount += 1;
+      if (state.dailyAudit.deepWorkMinutesToday === undefined) state.dailyAudit.deepWorkMinutesToday = 0;
+      state.dailyAudit.deepWorkMinutesToday += customDuration;
+      
+      showToast(`Deep Work (${customDuration}m). Momentum +${momentumGain.toFixed(2)}.`);
+
+      if (state.recoveryQuest && state.recoveryQuest.status === 'active' && state.recoveryQuest.activeQuest.type === 'deepwork') {
+        if (customDuration >= 15) {
+          state.recoveryQuest.status = 'completed';
+          state.baseActionEp += 200;
+          state.multiplierDamage = Math.max(0, (state.multiplierDamage || 0) - 0.15);
+          
+          if (!state.actionHistory) state.actionHistory = [];
+          state.actionHistory.unshift({
+            id: getNow() - 50,
+            type: 'recovery_success',
+            questLabel: state.recoveryQuest.activeQuest.label,
+            ep: 200,
+            actualEp: 200,
+            multAtTime: '1.00',
+            multDmg: -0.15,
+            momGain: 0,
+            ts: getNow() - 50
+          });
+          
+          setTimeout(() => {
+            showToast("🚨 RECOVERY PROTOCOL COMPLETE: +200 EP, -0.15 system damage!", false);
+          }, 1500);
+        }
+      }
+
+      if (state.sideQuest && state.sideQuest.status === 'active' && state.sideQuest.selectedOption.type === 'deepwork') {
+        if (customDuration >= state.sideQuest.selectedOption.targetMinutes) {
+          sideQuestSuccess = true;
+          questType = 'deepwork';
+          sideQuestRewardEp = state.sideQuest.selectedOption.epReward;
+          sideQuestMomGain = state.sideQuest.selectedOption.momReward;
+          sideQuestHeal = state.sideQuest.selectedOption.damageHeal;
+          state.sideQuest.status = 'success';
+        }
+      }
+    } else if (type === 'bio') { 
+      addedEp = 40; momentumGain = 0.08; state.stats.bioOptimized = (state.stats.bioOptimized || 0) + 1; showToast("Biology respected."); 
+    } else if (type === 'workout') { 
+      addedEp = 40; momentumGain = 0.10; showToast("Physical Forge. Body & Mind hardened."); 
+      
+      if (state.sideQuest && state.sideQuest.status === 'active' && state.sideQuest.selectedOption.type === 'workout') {
+        sideQuestSuccess = true;
+        questType = 'workout';
+        sideQuestRewardEp = state.sideQuest.selectedOption.epReward;
+        sideQuestMomGain = state.sideQuest.selectedOption.momReward;
+        sideQuestHeal = state.sideQuest.selectedOption.damageHeal;
+        state.sideQuest.status = 'success';
+      }
+    } else if (type === 'courage') { 
+      addedEp = 60; momentumGain = 0.15; showToast("Fear conquered. System expanded."); 
+    }
+
+    const metrics = calculateMetrics();
+    const currentMult = parseFloat(metrics.positiveMult);
+    
+    const actualEpAdded = Math.floor(addedEp * currentMult);
+    state.baseActionEp += actualEpAdded; 
+    state.systemMomentum = (state.systemMomentum || 0) + momentumGain;
+
+    let actualHealed = 0;
+    if (state.multiplierDamage > 0 && healedMult > 0) {
+        actualHealed = Math.min(state.multiplierDamage, healedMult);
+        state.multiplierDamage = Math.max(0, state.multiplierDamage - healedMult);
+        showToast(`System damage repaired (+${actualHealed.toFixed(2)}) & Momentum +${momentumGain}`);
+    }
+
+    const actionObj = { id: getNow(), type: type, ep: addedEp, actualEp: actualEpAdded, multAtTime: currentMult.toFixed(2), multDmg: -actualHealed, momGain: momentumGain, ts: getNow() };
+    if (customDuration !== null) {
+      actionObj.duration = customDuration;
+    }
+    state.actionHistory.unshift(actionObj);
+
+    if (sideQuestSuccess) {
+      const sideQuestEpAdded = Math.floor(sideQuestRewardEp * currentMult);
+      state.baseActionEp += sideQuestEpAdded;
+      state.systemMomentum = (state.systemMomentum || 0) + sideQuestMomGain;
+      
+      let sqHealed = 0;
+      if (state.multiplierDamage > 0 && sideQuestHeal > 0) {
+        sqHealed = Math.min(state.multiplierDamage, sideQuestHeal);
+        state.multiplierDamage = Math.max(0, state.multiplierDamage - sideQuestHeal);
+      }
+      
+      state.actionHistory.unshift({
+        id: getNow() + 10,
+        type: 'side_quest_success',
+        questType: questType,
+        ep: sideQuestRewardEp,
+        actualEp: sideQuestEpAdded,
+        multAtTime: currentMult.toFixed(2),
+        multDmg: -sqHealed,
+        momGain: sideQuestMomGain,
+        ts: getNow() + 10
+      });
+      
+      setTimeout(() => {
+        showToast(`⚡ EMERGENCY PROTOCOL COMPLETED: +${sideQuestEpAdded} EP & Momentum surge!`);
+      }, 1500);
+    }
+
+    render();
+    await saveData();
+  };
+
+  window.logPenalty = async function(type) {
+    if (!state.startTs) return;
+    if (!state.actionHistory) state.actionHistory = [];
+
+    let dropEp = 0;
+    let dropMult = 0;
+    let momentumLoss = 0;
+
+    if (type === 'waste') { dropEp = -50; dropMult = 0.3; momentumLoss = 0.25; showToast("Cheap dopamine. Momentum shattered.", true); } 
+    else if (type === 'biodisrespect') { dropEp = -30; dropMult = 0.15; momentumLoss = 0.15; showToast("Bio disrespect. Penalty applied.", true); }
+    else if (type === 'binge') { dropEp = -150; dropMult = 0.8; momentumLoss = 9999; showToast("Catastrophic Surrender. System bleeding.", true); }
+
+    const metrics = calculateMetrics();
+    const currentNegMult = parseFloat(metrics.negativeMult);
+    
+    const actualEpDropped = Math.floor(dropEp * currentNegMult);
+
+    state.baseActionEp += actualEpDropped; 
+    state.multiplierDamage = (state.multiplierDamage || 0) + dropMult;
+    
+    let actualMomLost = 0;
+    if ((state.systemMomentum || 0) > 0) {
+        actualMomLost = Math.min(state.systemMomentum, momentumLoss);
+        state.systemMomentum = Math.max(0, state.systemMomentum - momentumLoss);
+    }
+
+    state.actionHistory.unshift({ id: getNow(), type: type, ep: dropEp, actualEp: actualEpDropped, multAtTime: currentNegMult.toFixed(2), multDmg: dropMult, momGain: -actualMomLost, ts: getNow() });
+
+    render();
+    await saveData();
+  };
+
+  window.signContract = async function() {
+    const input = document.getElementById('quest-input');
+    if(!input || !input.value.trim()) return;
+    state.quest = { text: input.value.trim(), status: 'active', ts: getNow() };
+    render();
+    await saveData();
+    showToast("Directive locked in.");
+  };
+
+  window.resolveContract = async function(result) {
+    if(!state.quest || state.quest.status !== 'active') return;
+    
+    const metrics = calculateMetrics();
+
+    if(result === 'pass') {
+      const currentMult = parseFloat(metrics.positiveMult);
+      const actualEp = Math.floor(100 * currentMult);
+      state.baseActionEp += actualEp;
+      state.systemMomentum = (state.systemMomentum || 0) + 0.20; 
+      state.actionHistory.unshift({ id: getNow(), type: 'contract_pass', ep: 100, actualEp: actualEp, multAtTime: currentMult.toFixed(2), multDmg: 0, momGain: 0.20, ts: getNow() });
+      showToast("Directive executed. Momentum spiked.");
+    } else {
+      const currentNegMult = parseFloat(metrics.negativeMult);
+      const actualEp = Math.floor(-100 * currentNegMult); 
+      state.baseActionEp += actualEp;
+      state.multiplierDamage = (state.multiplierDamage || 0) + 0.5;
+      
+      let actualMomLost = 0;
+      if ((state.systemMomentum || 0) > 0) {
+          actualMomLost = Math.min(state.systemMomentum, 0.40);
+          state.systemMomentum = Math.max(0, state.systemMomentum - 0.40);
+      }
+      
+      state.actionHistory.unshift({ id: getNow(), type: 'contract_fail', ep: -100, actualEp: actualEp, multAtTime: currentNegMult.toFixed(2), multDmg: 0.5, momGain: -actualMomLost, ts: getNow() });
+      showToast("Directive failed. Massive damage and momentum loss.", true);
+    }
+    state.quest = { status: 'none', text: '', ts: null };
+    render();
+    await saveData();
+  };
+
+  window.activateRecovery = async function(optionId) {
+    const todayStr = getCasablancaDateStr(getNow());
+    if (!state.recoveryQuest) state.recoveryQuest = { status: 'none', date: null, activeQuest: null };
+    
+    let activeQuest = null;
+    if (optionId === 1) {
+      activeQuest = { type: 'deepwork', label: "Focus Injection: Log 15m+ Deep Work session" };
+    } else if (optionId === 2) {
+      activeQuest = { type: 'physical', label: "Physical Anchor: Do 10m physical movement" };
+    } else if (optionId === 3) {
+      activeQuest = { type: 'silence', label: "Stimulus Shield: Sit in 10m absolute silence/mind reset" };
+    }
+    
+    state.recoveryQuest = {
+      status: 'active',
+      date: todayStr,
+      activeQuest: activeQuest
+    };
+    
+    showToast("⚠️ Recovery protocol initialized.");
+    render();
+    await saveData();
+  };
+
+  window.completeRecovery = async function() {
+    if (!state.recoveryQuest || state.recoveryQuest.status !== 'active') return;
+    
+    const q = state.recoveryQuest.activeQuest;
+    state.recoveryQuest.status = 'completed';
+    state.baseActionEp += 200;
+    state.multiplierDamage = Math.max(0, (state.multiplierDamage || 0) - 0.15);
+    
+    if (!state.actionHistory) state.actionHistory = [];
+    state.actionHistory.unshift({
+      id: getNow(),
+      type: 'recovery_success',
+      questLabel: q.label,
+      ep: 200,
+      actualEp: 200,
+      multAtTime: '1.00',
+      multDmg: -0.15,
+      momGain: 0,
+      ts: getNow()
+    });
+    
+    showToast("🚨 RECOVERY PROTOCOL COMPLETE: +200 EP, -0.15 system damage!");
+    render();
+    await saveData();
+  };
+
+  window.undoSpecificAction = async function(id) {
+    if (!state.startTs || !state.actionHistory) return;
+    const index = state.actionHistory.findIndex(a => a.id === id);
+    if (index === -1) return;
+
+    const action = state.actionHistory[index];
+    
+    state.baseActionEp -= action.actualEp; 
+
+    if (action.type === 'start_friction') state.stats.startsCount = Math.max(0, (state.stats.startsCount || 0) - 1);
+    else if (['thought_kill', 'trigger_escape', 'urge_survive'].includes(action.type)) state.stats.battlesWon = Math.max(0, (state.stats.battlesWon || 0) - 1);
+    else if (action.type === 'deepwork') {
+      state.stats.deepWork = Math.max(0, state.stats.deepWork - 1);
+      if (state.dailyAudit) {
+        if (state.dailyAudit.deepWorkCount > 0) state.dailyAudit.deepWorkCount -= 1;
+        const dur = action.duration || 90;
+        state.dailyAudit.deepWorkMinutesToday = Math.max(0, (state.dailyAudit.deepWorkMinutesToday || 0) - dur);
+      }
+    }
+    else if (action.type === 'bio') state.stats.bioOptimized = Math.max(0, (state.stats.bioOptimized || 0) - 1);
+    
+    if (action.multDmg > 0) state.multiplierDamage = Math.max(0, (state.multiplierDamage || 0) - action.multDmg);
+    else if (action.multDmg < 0) state.multiplierDamage = (state.multiplierDamage || 0) + Math.abs(action.multDmg);
+
+    if (action.momGain > 0) state.systemMomentum = Math.max(0, (state.systemMomentum || 0) - action.momGain);
+    else if (action.momGain < 0) state.systemMomentum = (state.systemMomentum || 0) + Math.abs(action.momGain);
+
+    if (action.type === 'time_extender_consume') {
+      if (!state.inventory) state.inventory = { shields: 0, boostActive: false, boostUntil: null, timeExtenders: 0 };
+      state.inventory.timeExtenders = (state.inventory.timeExtenders || 0) + 1;
+      if (state.dailyAudit) state.dailyAudit.gracePeriodUntil = null;
+    }
+    else if (action.type === 'shield_consume') {
+      if (!state.inventory) state.inventory = { shields: 0, boostActive: false, boostUntil: null, timeExtenders: 0 };
+      state.inventory.shields = (state.inventory.shields || 0) + 1;
+    }
+
+    state.actionHistory.splice(index, 1);
+    render();
+    await saveData();
+    showToast("Input reverted.");
+  };
+
+  // --- FIREBASE INIT & SYNC ---
+
+  let unsubscribeSnapshot = null;
+  function setupRealtimeListener() {
+    if (!currentUserAlias || isOffline) return;
+    if (unsubscribeSnapshot) unsubscribeSnapshot();
+    
+    const docRef = doc(db, DB_PATH, currentUserAlias);
+    unsubscribeSnapshot = onSnapshot(docRef, (docSnap) => {
+      if (docSnap.exists()) {
+        const data = docSnap.data();
+
+        state = { ...defaultState, ...data };
+        if(!state.stats) state.stats = { resisted: 0, deepWork: 0, bioOptimized: 0, battlesWon: 0, startsCount: 0 };
+        if(state.stats.startsCount === undefined) state.stats.startsCount = 0;
+        if(state.stats.battlesWon === undefined) state.stats.battlesWon = 0;
+        if(state.baseActionEp === undefined) state.baseActionEp = 0;
+        if(state.multiplierDamage === undefined) state.multiplierDamage = 0;
+        if(state.systemMomentum === undefined) state.systemMomentum = 0;
+        if(!state.quest) state.quest = { status: 'none', text: '', ts: null };
+        if(!state.dailyAudit) {
+          state.dailyAudit = { lastDate: getCasablancaDateStr(getNow()), deepWorkCount: 0, targetQuota: 1, targetMinutes: 45, successStreak: 0, deepWorkMinutesToday: 0, gracePeriodUntil: null, absoluteStreak: 0, maxAbsoluteStreak: 0 };
+        } else {
+          if (state.dailyAudit.targetQuota === undefined) state.dailyAudit.targetQuota = 1;
+          if (state.dailyAudit.targetMinutes === undefined) state.dailyAudit.targetMinutes = 45;
+          if (state.dailyAudit.successStreak === undefined) state.dailyAudit.successStreak = 0;
+          if (state.dailyAudit.deepWorkMinutesToday === undefined) state.dailyAudit.deepWorkMinutesToday = 0;
+          if (state.dailyAudit.gracePeriodUntil === undefined) state.dailyAudit.gracePeriodUntil = null;
+        }
+        if (state.generation === undefined) state.generation = 1;
+        if (state.hibernation === undefined) state.hibernation = false;
+        if(!state.actionHistory) state.actionHistory = [];
+        if (!state.inventory) state.inventory = { shields: 0, boostActive: false, boostUntil: null, timeExtenders: 0 };
+        if (state.inventory.shields === undefined) state.inventory.shields = 0;
+        if (state.inventory.boostActive === undefined) state.inventory.boostActive = false;
+        if (state.inventory.boostUntil === undefined) state.inventory.boostUntil = null;
+        if (state.inventory.timeExtenders === undefined) state.inventory.timeExtenders = 0;
+        if (!state.sideQuest) state.sideQuest = { status: 'none', date: getCasablancaDateStr(getNow()), linguisticDates: [], linguisticSteps: [false, false, false, false] };
+        if (!state.sideQuest.linguisticDates) state.sideQuest.linguisticDates = [];
+        if (!state.sideQuest.linguisticSteps) state.sideQuest.linguisticSteps = [false, false, false, false];
+        if (!state.challenge) state.challenge = { status: 'inactive', currentStreak: 0, totalResets: 0, startDate: null, startTs: null, tier: 'gold' };
+        if (state.challenge && state.challenge.tier === undefined) state.challenge.tier = 'gold';
+        if (!state.recoveryQuest) state.recoveryQuest = { status: 'none', date: null, activeQuest: null };
+        if (state.showPenaltyButtons === undefined) state.showPenaltyButtons = false;
+        if (state.allowSuddenAnomalies === undefined) state.allowSuddenAnomalies = false;
+        if (state.timeFrozen === undefined) state.timeFrozen = false;
+        
+        isLoaded = true;
+        render();
+      } else { 
+        // User was deleted from Firebase but still in localStorage
+        window.logout();
+        showToast("Critical Error: Identity not found in the database. Session terminated.", true);
+      }
+    }, (error) => { console.error("Error listening:", error); document.getElementById('sync-status').innerText = '❌ SYNC ERROR'; });
+  }
+
+  async function initCloud() {
+    try {
+      if (!app) { 
+        app = initializeApp(firebaseConfig); 
+        auth = getAuth(app); 
+        db = initializeFirestore(app, { experimentalForceLongPolling: true }); 
+      }
+      const initAuth = async () => {
+        try { 
+            await signInAnonymously(auth); 
+        } 
+        catch (authError) { showToast("Auth Error", true); }
+      };
+      await initAuth();
+      onAuthStateChanged(auth, (user) => { 
+        if (user && !isOffline && currentUserAlias) { setupRealtimeListener(); initBotsIfNeeded(); } 
+      });
+    } catch (error) { console.error("Init error:", error); }
+  }
+
+  const savedAlias = localStorage.getItem('dtx_alias');
+  if (savedAlias) {
+    currentUserAlias = savedAlias;
+    setView('view-dashboard');
+    if (!isOffline) {
+      initCloud();
+      syncSecureTime().then(() => { render(); });
+    }
+  } else {
+    setView('view-auth');
+    if (!isOffline) {
+      initCloud();
+      syncSecureTime().then(() => { render(); });
+    }
+  }
+</script>
+</body>
+</html>
